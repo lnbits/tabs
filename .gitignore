@@ -3,6 +3,9 @@ node_modules
 .venv
 .mypy_cache
 
+# test data
+data/*
+
 # AI agent
 .codex
 AGENTS.md
