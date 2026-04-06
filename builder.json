@@ -1,0 +1,86 @@
+{
+    "id": "tabs",
+    "name": "Tabs",
+    "stub_version": "v0.3.0",
+    "short_description": "",
+    "description": "A reusable extension that stores open balances per merchant-defined account and exposes APIs/UI to post entries and settle balances.",
+    "owner_data": {
+        "name": "Tabs",
+        "editable": true,
+        "fields": [
+            {
+                "name": "name",
+                "type": "str",
+                "label": "Name",
+                "hint": "",
+                "optional": true,
+                "editable": true,
+                "searchable": true,
+                "sortable": true,
+                "fields": []
+            }
+        ]
+    },
+    "client_data": {
+        "name": "Settlements",
+        "editable": true,
+        "fields": [
+            {
+                "name": "name",
+                "type": "str",
+                "label": "Name",
+                "hint": "",
+                "optional": true,
+                "editable": true,
+                "searchable": true,
+                "sortable": true,
+                "fields": []
+            }
+        ]
+    },
+    "settings_data": {
+        "name": "Settings",
+        "editable": true,
+        "fields": [
+            {
+                "name": "currency",
+                "type": "str",
+                "label": "Name",
+                "hint": "",
+                "optional": true,
+                "editable": true,
+                "searchable": true,
+                "sortable": true,
+                "fields": []
+            }
+        ],
+        "enabled": true,
+        "type": "user"
+    },
+    "public_page": {
+        "has_public_page": true,
+        "owner_data_fields": {
+            "name": "",
+            "description": ""
+        },
+        "client_data_fields": {
+            "public_inputs": []
+        },
+        "action_fields": {
+            "generate_action": true,
+            "generate_payment_logic": false,
+            "wallet_id": "",
+            "currency": "",
+            "amount": "",
+            "amount_source": null,
+            "paid_flag": ""
+        }
+    },
+    "preview_action": {
+        "is_preview_mode": false,
+        "is_settings_preview": false,
+        "is_owner_data_preview": false,
+        "is_client_data_preview": false,
+        "is_public_page_preview": false
+    }
+}

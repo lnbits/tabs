@@ -1,0 +1,14 @@
+[
+  {
+    "path": "/tabs/",
+    "name": "PageTabs",
+    "template": "/tabs/static/index.vue",
+    "component": "/tabs/static/index.js"
+  },
+  {
+    "path": "/tabs/:id",
+    "name": "PageTabsPublic",
+    "template": "/tabs/static/public_page.vue",
+    "component": "/tabs/static/public_page.js"
+  }
+]
