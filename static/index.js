@@ -6,6 +6,7 @@ window.PageTabs = {
       tabsList: [],
       tabDetails: {},
       currencies: ['sats'],
+      selected: [],
       filters: {
         status: null,
         includeArchived: false
@@ -33,11 +34,71 @@ window.PageTabs = {
         {label: 'Other', value: 'other'},
         {label: 'Writeoff', value: 'writeoff'}
       ],
+      entriesTable: {
+        search: '',
+        loading: false,
+        columns: [
+          {
+            name: 'description',
+            align: 'left',
+            label: 'Description',
+            field: 'description',
+            sortable: false
+          },
+          {
+            name: 'amount',
+            align: 'left',
+            label: 'Amount',
+            field: row =>
+              this.formatEntryAmount(
+                row,
+                this.tabDetails[row.tab_id]?.currency || 'sats'
+              ),
+            sortable: true
+          },
+          {
+            name: 'entry_type',
+            align: 'left',
+            label: 'Type',
+            field: 'entry_type',
+            sortable: true
+          },
+          {
+            name: 'source',
+            align: 'left',
+            label: 'Source',
+            field: row =>
+              `${row.source}${row.source_id ? ` (${row.source_id})` : ''}`,
+            sortable: false
+          },
+          {
+            name: 'created_at',
+            align: 'left',
+            label: 'Created',
+            field: 'created_at',
+            sortable: true,
+            format: val => (val ? LNbits.utils.formatDateFrom(val) : '-')
+          }
+        ],
+        pagination: {
+          sortBy: 'created_at',
+          rowsPerPage: 10,
+          page: 1,
+          descending: true,
+          rowsNumber: 0
+        }
+      },
       tabsTable: {
         search: '',
         loading: false,
         columns: [
-          {name: 'name', align: 'left', label: 'Name', field: 'name', sortable: true},
+          {
+            name: 'name',
+            align: 'left',
+            label: 'Name',
+            field: 'name',
+            sortable: true
+          },
           {
             name: 'customer',
             align: 'left',
@@ -52,15 +113,34 @@ window.PageTabs = {
             field: row => row.reference || '',
             sortable: false
           },
-          {name: 'status', align: 'left', label: 'Status', field: 'status', sortable: true},
-          {name: 'currency', align: 'left', label: 'Currency', field: 'currency', sortable: true},
-          {name: 'balance', align: 'left', label: 'Balance', field: 'balance', sortable: true},
+          {
+            name: 'status',
+            align: 'left',
+            label: 'Status',
+            field: 'status',
+            sortable: true
+          },
+          {
+            name: 'currency',
+            align: 'left',
+            label: 'Currency',
+            field: 'currency',
+            sortable: true
+          },
+          {
+            name: 'balance',
+            align: 'left',
+            label: 'Balance',
+            field: 'balance',
+            sortable: true
+          },
           {
             name: 'updated_at',
             align: 'left',
             label: 'Updated',
             field: 'updated_at',
-            sortable: true
+            sortable: true,
+            format: val => (val ? LNbits.utils.formatDateFrom(val) : '-')
           }
         ],
         pagination: {
@@ -100,9 +180,28 @@ window.PageTabs = {
     },
     'filters.includeArchived'() {
       this.getTabs()
+    },
+    selected() {
+      if (this.selected.length === 1) {
+        this.entriesTable.pagination.page = 1
+        this.loadTabEntries(this.selected[0].id, {force: true})
+      }
     }
   },
   methods: {
+    ensureTabDetails(tabId) {
+      const selectedTab = this.tabsList.find(tab => tab.id === tabId)
+      if (!this.tabDetails[tabId]) {
+        this.tabDetails[tabId] = {
+          entries: [],
+          settlements: [],
+          currency: selectedTab?.currency || 'sats'
+        }
+      } else if (selectedTab?.currency) {
+        this.tabDetails[tabId].currency = selectedTab.currency
+      }
+      return this.tabDetails[tabId]
+    },
     emptyTabForm() {
       return {
         wallet: this.g?.user?.walletOptions?.[0]?.value || null,
@@ -149,12 +248,6 @@ window.PageTabs = {
       if (status === 'closed') return 'grey'
       return 'primary'
     },
-    settlementStatusColor(status) {
-      if (status === 'completed') return 'positive'
-      if (status === 'pending') return 'warning'
-      if (status === 'cancelled') return 'grey'
-      return 'negative'
-    },
     formatAmount(amount, currency) {
       if (currency === 'sats') {
         return `${Number(amount || 0).toLocaleString()} sats`
@@ -171,19 +264,6 @@ window.PageTabs = {
             : ''
       return `${sign}${this.formatAmount(entry.amount || 0, currency)}`
     },
-    formatLimit(tab) {
-      if (tab.limit_type !== 'hard') return 'No limit'
-      return this.formatAmount(tab.limit_amount || 0, tab.currency)
-    },
-    dateFromNow(date) {
-      return moment(date).fromNow()
-    },
-    tabEntries(tabId) {
-      return this.tabDetails[tabId]?.entries || []
-    },
-    tabSettlements(tabId) {
-      return this.tabDetails[tabId]?.settlements || []
-    },
     async getTabs(props) {
       try {
         this.tabsTable.loading = true
@@ -192,7 +272,10 @@ window.PageTabs = {
           params += `${params ? '&' : ''}status=${encodeURIComponent(this.filters.status)}`
         }
         params += `${params ? '&' : ''}is_archived=${this.filters.includeArchived}`
-        const {data} = await LNbits.api.request('GET', `/tabs/api/v1/tabs/paginated?${params}`)
+        const {data} = await LNbits.api.request(
+          'GET',
+          `/tabs/api/v1/tabs/paginated?${params}`
+        )
         this.tabsList = data.data || []
         this.tabsTable.pagination.rowsNumber = data.total || 0
       } catch (error) {
@@ -201,25 +284,42 @@ window.PageTabs = {
         this.tabsTable.loading = false
       }
     },
-    async loadTabDetails(tabId, force = false) {
-      if (this.tabDetails[tabId] && !force) return
+    async loadTabEntries(tabId, options = {}) {
+      const {force = false, props = null} = options
+      const details = this.ensureTabDetails(tabId)
+      if (details.entries.length && !force && !props) return
+
       try {
-        const [entriesResponse, settlementsResponse] = await Promise.all([
-          LNbits.api.request('GET', `/tabs/api/v1/tabs/${tabId}/entries?limit=10`),
-          LNbits.api.request('GET', `/tabs/api/v1/tabs/${tabId}/settlements?limit=10`)
-        ])
-        this.tabDetails[tabId] = {
-          entries: entriesResponse.data || [],
-          settlements: settlementsResponse.data || []
-        }
+        this.entriesTable.loading = true
+        const params = LNbits.utils.prepareFilterQuery(this.entriesTable, props)
+        const {data} = await LNbits.api.request(
+          'GET',
+          `/tabs/api/v1/tabs/${tabId}/entries/paginated?${params}`
+        )
+        details.entries = data.data || []
+        this.entriesTable.pagination.rowsNumber = data.total || 0
       } catch (error) {
         LNbits.utils.notifyApiError(error)
+      } finally {
+        this.entriesTable.loading = false
       }
     },
-    async toggleRow(props) {
-      props.expand = !props.expand
-      if (props.expand) {
-        await this.loadTabDetails(props.row.id)
+    async requestTabEntries(props) {
+      if (!this.selected.length) return
+      await this.loadTabEntries(this.selected[0].id, {props})
+    },
+    async loadTabSettlements(tabId, force = false) {
+      const details = this.ensureTabDetails(tabId)
+      if (details.settlements.length && !force) return
+
+      try {
+        const {data} = await LNbits.api.request(
+          'GET',
+          `/tabs/api/v1/tabs/${tabId}/settlements?limit=10`
+        )
+        details.settlements = data || []
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
       }
     },
     showCreateTabDialog() {
@@ -248,7 +348,12 @@ window.PageTabs = {
             : null
         const method = data.id ? 'PUT' : 'POST'
         const suffix = data.id ? `/${data.id}` : ''
-        await LNbits.api.request(method, `/tabs/api/v1/tabs${suffix}`, null, data)
+        await LNbits.api.request(
+          method,
+          `/tabs/api/v1/tabs${suffix}`,
+          null,
+          data
+        )
         this.tabDialog.show = false
         await this.getTabs()
       } catch (error) {
@@ -269,7 +374,10 @@ window.PageTabs = {
           amount:
             this.entryDialog.data.entry_type === 'note'
               ? null
-              : this.normalizeAmount(this.entryDialog.currency, this.entryDialog.data.amount)
+              : this.normalizeAmount(
+                  this.entryDialog.currency,
+                  this.entryDialog.data.amount
+                )
         }
         await LNbits.api.request(
           'POST',
@@ -279,7 +387,7 @@ window.PageTabs = {
         )
         this.entryDialog.show = false
         await this.getTabs()
-        await this.loadTabDetails(this.entryDialog.tabId, true)
+        await this.loadTabEntries(this.entryDialog.tabId, {force: true})
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       }
@@ -310,7 +418,8 @@ window.PageTabs = {
         if (data.payment_request) {
           Quasar.Notify.create({
             type: 'info',
-            message: 'Lightning invoice created. Open the public page to complete payment.'
+            message:
+              'Lightning invoice created. Open the public page to complete payment.'
           })
         } else {
           Quasar.Notify.create({
@@ -319,14 +428,22 @@ window.PageTabs = {
           })
         }
         await this.getTabs()
-        await this.loadTabDetails(this.settlementDialog.tabId, true)
+        await Promise.all([
+          this.loadTabEntries(this.settlementDialog.tabId, {force: true}),
+          this.loadTabSettlements(this.settlementDialog.tabId, true)
+        ])
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       }
     },
     async changeStatus(tab, status) {
       try {
-        await LNbits.api.request('POST', `/tabs/api/v1/tabs/${tab.id}/status`, null, {status})
+        await LNbits.api.request(
+          'POST',
+          `/tabs/api/v1/tabs/${tab.id}/status`,
+          null,
+          {status}
+        )
         await this.getTabs()
       } catch (error) {
         LNbits.utils.notifyApiError(error)
@@ -335,7 +452,10 @@ window.PageTabs = {
     async archiveTab(tab) {
       await LNbits.utils.confirmDialog('Archive this tab?').onOk(async () => {
         try {
-          await LNbits.api.request('POST', `/tabs/api/v1/tabs/${tab.id}/archive`)
+          await LNbits.api.request(
+            'POST',
+            `/tabs/api/v1/tabs/${tab.id}/archive`
+          )
           await this.getTabs()
         } catch (error) {
           LNbits.utils.notifyApiError(error)
