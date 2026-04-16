@@ -131,7 +131,7 @@ window.PageTabs = {
             name: 'balance',
             align: 'left',
             label: 'Balance',
-            field: 'balance',
+            field: row => this.formatAmount(row.balance, row.currency),
             sortable: true
           },
           {

@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from lnbits.db import FilterModel
 from pydantic import BaseModel, Field
 
-
 TAB_STATUSES = ("open", "suspended", "closed")
 TAB_LIMIT_TYPES = ("none", "hard")
 TAB_ENTRY_TYPES = ("charge", "credit", "adjustment", "settlement", "note")
@@ -71,7 +70,8 @@ class PublicTab(BaseModel):
 
 
 class TabFilters(FilterModel):
-    __search_fields__ = [  # noqa: RUF012
+    __search_fields__ = [
+        "wallet",
         "name",
         "reference",
         "customer_name",
@@ -79,7 +79,8 @@ class TabFilters(FilterModel):
         "status",
     ]
 
-    __sort_fields__ = [  # noqa: RUF012
+    __sort_fields__ = [
+        "wallet",
         "name",
         "currency",
         "status",
@@ -88,6 +89,7 @@ class TabFilters(FilterModel):
         "updated_at",
     ]
 
+    wallet: str | None = None
     status: str | None = None
     currency: str | None = None
     is_archived: bool | None = None
@@ -127,7 +129,7 @@ class TabEntry(BaseModel):
 
 
 class TabEntryFilters(FilterModel):
-    __search_fields__ = [  # noqa: RUF012
+    __search_fields__ = [
         "entry_type",
         "description",
         "source",
@@ -137,7 +139,7 @@ class TabEntryFilters(FilterModel):
         "idempotency_key",
     ]
 
-    __sort_fields__ = [  # noqa: RUF012
+    __sort_fields__ = [
         "entry_type",
         "amount",
         "created_at",
@@ -189,7 +191,7 @@ class SettlementCreateResponse(BaseModel):
 
 
 class TabSettlementFilters(FilterModel):
-    __search_fields__ = [  # noqa: RUF012
+    __search_fields__ = [
         "method",
         "status",
         "payment_hash",
@@ -199,7 +201,7 @@ class TabSettlementFilters(FilterModel):
         "idempotency_key",
     ]
 
-    __sort_fields__ = [  # noqa: RUF012
+    __sort_fields__ = [
         "method",
         "status",
         "amount",

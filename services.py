@@ -22,14 +22,14 @@ from .crud import (
     update_tab_settlement,
 )
 from .models import (
-    CreateTabEntry,
-    CreateTabSettlement,
     SETTLEMENT_METHODS,
     SETTLEMENT_STATUSES,
-    SettlementCreateResponse,
     TAB_ENTRY_TYPES,
     TAB_LIMIT_TYPES,
     TAB_STATUSES,
+    CreateTabEntry,
+    CreateTabSettlement,
+    SettlementCreateResponse,
     Tab,
     TabEntry,
     TabSettlement,

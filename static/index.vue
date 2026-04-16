@@ -25,7 +25,7 @@
         </q-card-section>
       </q-card>
 
-      <q-card>
+      <q-card class="q-mt-md">
         <q-card-section>
           <div class="row q-col-gutter-md q-mb-md">
             <div class="col-12 col-md-5">

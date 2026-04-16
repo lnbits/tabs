@@ -1,5 +1,5 @@
 <template id="page-tabs-public">
-  <q-page class="row q-col-gutter-md justify-center">
+  <div class="row q-col-gutter-md justify-center">
     <div class="col-12 col-md-6 col-lg-5 q-gutter-y-md">
       <q-card>
         <q-card-section>
@@ -52,7 +52,7 @@
         <q-card-section>
           <div class="text-subtitle2">Tab Summary</div>
         </q-card-section>
-        <q-list dense separator>
+        <q-list separator>
           <q-item>
             <q-item-section>
               <q-item-label caption>Customer</q-item-label>
@@ -93,7 +93,10 @@
             :rules="[val => validAmount(val) || 'Enter a valid amount']"
           >
             <template v-slot:append>
-              <span style="font-size: 12px" v-text="tab.currency || 'sats'"></span>
+              <span
+                style="font-size: 12px"
+                v-text="tab.currency || 'sats'"
+              ></span>
             </template>
           </q-input>
 
@@ -128,7 +131,9 @@
     >
       <q-card class="q-pa-lg q-pt-xl lnbits__dialog-card text-center">
         <div class="text-subtitle1 q-mb-md">
-          <span v-text="formatAmount(qrCodeDialog.data.amount, tab.currency)"></span>
+          <span
+            v-text="formatAmount(qrCodeDialog.data.amount, tab.currency)"
+          ></span>
         </div>
         <a
           v-if="qrCodeDialog.data.payment_request"
@@ -140,15 +145,11 @@
           ></lnbits-qrcode>
         </a>
         <div class="q-mt-md">
-          <q-btn
-            outline
-            color="grey"
-            @click="copyPaymentRequest"
-          >
+          <q-btn outline color="grey" @click="copyPaymentRequest">
             Copy Invoice
           </q-btn>
         </div>
       </q-card>
     </q-dialog>
-  </q-page>
+  </div>
 </template>
