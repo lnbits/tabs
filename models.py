@@ -110,6 +110,7 @@ class CreateTabEntry(BaseModel):
     operator_user_id: str | None = None
     idempotency_key: str | None = None
 
+
 class PublicTabEntry(BaseModel):
     entry_type: str
     amount: float = 0
@@ -119,6 +120,7 @@ class PublicTabEntry(BaseModel):
     source: str | None = None
     source_action: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 class TabEntry(PublicTabEntry):
     id: str

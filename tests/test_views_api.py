@@ -1,6 +1,5 @@
 import pytest
 from httpx import AsyncClient
-
 from lnbits.core.services.users import create_user_account_no_ckeck
 from lnbits.helpers import create_access_token
 
@@ -17,12 +16,7 @@ async def test_tabs_api_happy_flow(client: AsyncClient):
 
     create_response = await client.post(
         "/tabs/api/v1/tabs",
-        json={
-            "wallet": wallet.id,
-            "name": "Main Bar",
-            "customer_name": "Alice",
-            "currency": "sats"
-        },
+        json={"wallet": wallet.id, "name": "Main Bar", "customer_name": "Alice", "currency": "sats"},
         headers=headers,
     )
     assert create_response.status_code == 201

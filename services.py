@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 
 from fastapi import HTTPException
-
 from lnbits.core.crud import get_wallet
 from lnbits.core.models import Payment
 from lnbits.core.services import create_invoice
@@ -55,9 +54,7 @@ def _normalize_amount(currency: str, amount: float | int | None) -> float:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid amount.") from exc
     if _is_sats(currency):
         if numeric != int(numeric):
-            raise HTTPException(
-                HTTPStatus.BAD_REQUEST, "Sats amounts must be whole numbers."
-            )
+            raise HTTPException(HTTPStatus.BAD_REQUEST, "Sats amounts must be whole numbers.")
         return float(int(numeric))
     return round(numeric, 2)
 
@@ -104,9 +101,7 @@ def _validate_settlement_status(status: str) -> None:
 async def validate_tab_wallet_ownership(user_id: str, wallet_id: str) -> None:
     wallet = await get_wallet(wallet_id)
     if not wallet or wallet.user != user_id:
-        raise HTTPException(
-            HTTPStatus.FORBIDDEN, "Invalid wallet. Must belong to authenticated user."
-        )
+        raise HTTPException(HTTPStatus.FORBIDDEN, "Invalid wallet. Must belong to authenticated user.")
 
 
 def validate_tab_payload(tab: Tab) -> None:
@@ -132,9 +127,7 @@ def validate_tab_payload(tab: Tab) -> None:
 def _validate_entry_amount(tab: Tab, entry_type: str, amount: float | None) -> float:
     if entry_type == "note":
         if amount not in (None, 0):
-            raise HTTPException(
-                HTTPStatus.BAD_REQUEST, "Note entries cannot change the balance."
-            )
+            raise HTTPException(HTTPStatus.BAD_REQUEST, "Note entries cannot change the balance.")
         return 0
     normalized = _normalize_amount(tab.currency, amount)
     if normalized <= 0 and entry_type in {"charge", "credit", "settlement"}:
@@ -146,28 +139,20 @@ def _validate_entry_against_tab(tab: Tab, entry: CreateTabEntry, amount: float) 
     if tab.is_archived:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs are read-only.")
     if tab.status == "closed" and entry.entry_type != "note":
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Closed tabs cannot accept new entries."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot accept new entries.")
     if tab.status == "suspended" and entry.entry_type == "charge":
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Suspended tabs cannot accept new charges."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Suspended tabs cannot accept new charges.")
 
     next_balance = round(tab.balance + _entry_delta(entry.entry_type, amount), 2)
     if next_balance < 0 and not _is_zero(tab.currency, next_balance):
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Entry would make the tab balance negative."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Entry would make the tab balance negative.")
     if (
         entry.entry_type == "charge"
         and tab.limit_type == "hard"
         and tab.limit_amount is not None
         and next_balance > tab.limit_amount
     ):
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Charge would exceed the configured tab limit."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Charge would exceed the configured tab limit.")
 
 
 async def post_entry(tab: Tab, data: CreateTabEntry) -> tuple[Tab, TabEntry]:
@@ -193,15 +178,11 @@ async def post_entry(tab: Tab, data: CreateTabEntry) -> tuple[Tab, TabEntry]:
 async def update_status(tab: Tab, data: UpdateTabStatus) -> Tab:
     _validate_tab_status(data.status)
     if tab.is_archived:
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Archived tabs cannot change status."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs cannot change status.")
     if tab.status == "closed" and data.status != "closed":
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot be reopened.")
     if data.status == "closed" and not _is_zero(tab.currency, tab.balance):
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Tabs can only be closed when the balance is zero."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Tabs can only be closed when the balance is zero.")
 
     tab.status = data.status
     if data.status == "closed":
@@ -213,9 +194,7 @@ async def update_status(tab: Tab, data: UpdateTabStatus) -> Tab:
 
 async def archive_tab(tab: Tab) -> Tab:
     if not _is_zero(tab.currency, tab.balance):
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Only fully settled tabs can be archived."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Only fully settled tabs can be archived.")
     tab.is_archived = True
     tab.archived_at = _utc_now()
     await update_tab(tab)
@@ -224,9 +203,7 @@ async def archive_tab(tab: Tab) -> Tab:
 
 async def delete_tab_if_empty(tab: Tab) -> None:
     if not _is_zero(tab.currency, tab.balance):
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Cannot delete a tab with a non-zero balance."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Cannot delete a tab with a non-zero balance.")
     if await count_tab_entries(tab.id) > 0 or await count_tab_settlements(tab.id) > 0:
         raise HTTPException(
             HTTPStatus.BAD_REQUEST,
@@ -235,9 +212,7 @@ async def delete_tab_if_empty(tab: Tab) -> None:
     await delete_tab(tab.id)
 
 
-async def create_settlement(
-    tab: Tab, data: CreateTabSettlement
-) -> SettlementCreateResponse:
+async def create_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
     _validate_settlement_method(data.method)
 
     if tab.is_archived:
@@ -246,18 +221,12 @@ async def create_settlement(
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot be settled.")
     outstanding_balance = _normalize_amount(tab.currency, tab.balance)
     if _is_zero(tab.currency, outstanding_balance) or outstanding_balance <= 0:
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle.")
 
-    requested_amount = (
-        data.amount if data.amount is not None else outstanding_balance
-    )
+    requested_amount = data.amount if data.amount is not None else outstanding_balance
     amount = _normalize_amount(tab.currency, requested_amount)
     if amount <= 0:
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Settlement amount must be greater than zero."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Settlement amount must be greater than zero.")
     if amount > outstanding_balance:
         if _is_zero(tab.currency, amount - outstanding_balance):
             amount = outstanding_balance
@@ -271,9 +240,7 @@ async def create_settlement(
     if data.idempotency_key:
         existing = await get_tab_settlement_by_idempotency(tab.id, data.idempotency_key)
         if existing:
-            return SettlementCreateResponse(
-                settlement=existing, payment_request=existing.payment_request
-            )
+            return SettlementCreateResponse(settlement=existing, payment_request=existing.payment_request)
 
     if data.method == "lightning":
         settlement = await create_tab_settlement(tab.id, data)
@@ -294,26 +261,18 @@ async def create_settlement(
         settlement.checking_id = payment.checking_id
         settlement.payment_request = payment.bolt11
         settlement = await update_tab_settlement(settlement)
-        return SettlementCreateResponse(
-            settlement=settlement, payment_request=payment.bolt11
-        )
+        return SettlementCreateResponse(settlement=settlement, payment_request=payment.bolt11)
 
     settlement = await create_tab_settlement(tab.id, data)
-    return SettlementCreateResponse(
-        settlement=await complete_settlement(settlement, mark_status_only=False)
-    )
+    return SettlementCreateResponse(settlement=await complete_settlement(settlement, mark_status_only=False))
 
 
-async def complete_settlement(
-    settlement: TabSettlement, mark_status_only: bool = False
-) -> TabSettlement:
+async def complete_settlement(settlement: TabSettlement, mark_status_only: bool = False) -> TabSettlement:
     _validate_settlement_status(settlement.status)
     if settlement.status == "completed":
         return settlement
     if settlement.status == "cancelled":
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Cancelled settlements cannot be completed."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Cancelled settlements cannot be completed.")
 
     tab = await get_tab_by_id(settlement.tab_id)
     if not tab:
@@ -357,9 +316,7 @@ async def complete_settlement(
 
 async def cancel_settlement(settlement: TabSettlement) -> TabSettlement:
     if settlement.status == "completed":
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Completed settlements cannot be cancelled."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Completed settlements cannot be cancelled.")
     settlement.status = "cancelled"
     settlement.cancelled_at = _utc_now()
     return await update_tab_settlement(settlement)

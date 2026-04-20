@@ -440,7 +440,9 @@ window.PageTabs = {
       this.settlementDialog.tabId = tab.id
       this.settlementDialog.currency = mappedTab.currency
       this.settlementDialog.balance = mappedTab.balance || 0
-      this.settlementDialog.data = this.emptySettlementForm(mappedTab.balance || 0)
+      this.settlementDialog.data = this.emptySettlementForm(
+        mappedTab.balance || 0
+      )
       this.settlementDialog.show = true
     },
     async saveSettlement() {

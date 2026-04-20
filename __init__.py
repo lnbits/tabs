@@ -9,9 +9,7 @@ from .tasks import wait_for_paid_invoices
 from .views import tabs_generic_router
 from .views_api import tabs_api_router
 
-tabs_ext: APIRouter = APIRouter(
-    prefix="/tabs", tags=["Tabs"]
-)
+tabs_ext: APIRouter = APIRouter(prefix="/tabs", tags=["Tabs"])
 tabs_ext.include_router(tabs_generic_router)
 tabs_ext.include_router(tabs_api_router)
 

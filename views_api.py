@@ -23,8 +23,8 @@ from .models import (
     CreateTab,
     CreateTabEntry,
     CreateTabSettlement,
-    PublicTabEntry,
     PublicTab,
+    PublicTabEntry,
     PublicTabSettlementRequest,
     SettlementCreateResponse,
     Tab,
@@ -89,9 +89,7 @@ async def api_create_tab(
     user: User = Depends(check_user_exists),
 ) -> Tab:
     if data.wallet not in user.wallet_ids:
-        raise HTTPException(
-            HTTPStatus.FORBIDDEN, "Invalid wallet. Must belong to authenticated user."
-        )
+        raise HTTPException(HTTPStatus.FORBIDDEN, "Invalid wallet. Must belong to authenticated user.")
     await validate_tab_wallet_ownership(user.id, data.wallet)
     tab = Tab(id="pending", status="open", **data.dict())
     validate_tab_payload(tab)

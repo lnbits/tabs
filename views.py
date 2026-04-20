@@ -19,14 +19,10 @@ def tabs_renderer():
 
 
 # Backend admin page
-tabs_generic_router.add_api_route(
-    "/", methods=["GET"], endpoint=index, dependencies=[Depends(check_account_exists)]
-)
+tabs_generic_router.add_api_route("/", methods=["GET"], endpoint=index, dependencies=[Depends(check_account_exists)])
 
 
 # Frontend shareable page
 
 
 tabs_generic_router.add_api_route("/{tabs_id}", methods=["GET"], endpoint=index_public)
-
-

@@ -98,7 +98,10 @@ window.PageTabsPublic = {
           'GET',
           `/tabs/api/v1/public/tabs/${this.tabId}/entries`
         )
-        this.tab.entries = this.mapPublicEntries(data, this.tab.currency || 'sats')
+        this.tab.entries = this.mapPublicEntries(
+          data,
+          this.tab.currency || 'sats'
+        )
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       }

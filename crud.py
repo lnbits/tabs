@@ -75,9 +75,7 @@ async def get_tabs(wallet_ids: list[str], include_archived: bool = False) -> lis
     )
 
 
-async def get_tabs_paginated(
-    wallet_ids: list[str], filters: Filters[TabFilters] | None = None
-) -> Page[Tab]:
+async def get_tabs_paginated(wallet_ids: list[str], filters: Filters[TabFilters] | None = None) -> Page[Tab]:
     if not wallet_ids:
         return Page(data=[], total=0)
     clause, values = _in_clause(wallet_ids, "wallet")
@@ -100,9 +98,7 @@ async def delete_tab(tab_id: str) -> None:
     await db.execute("DELETE FROM tabs.tabs WHERE id = :tab_id", {"tab_id": tab_id})
 
 
-async def get_tab_entry_by_idempotency(
-    tab_id: str, idempotency_key: str
-) -> TabEntry | None:
+async def get_tab_entry_by_idempotency(tab_id: str, idempotency_key: str) -> TabEntry | None:
     return await db.fetchone(
         """
         SELECT * FROM tabs.tab_entries
@@ -119,9 +115,7 @@ async def create_tab_entry(tab_id: str, data: CreateTabEntry) -> TabEntry:
     return entry
 
 
-async def get_tab_entries_paginated(
-    tab_id: str, filters: Filters[TabEntryFilters] | None = None
-) -> Page[TabEntry]:
+async def get_tab_entries_paginated(tab_id: str, filters: Filters[TabEntryFilters] | None = None) -> Page[TabEntry]:
     return await db.fetch_page(
         "SELECT * FROM tabs.tab_entries",
         where=["tab_id = :tab_id"],
@@ -144,9 +138,7 @@ async def get_tab_entries(tab_id: str, limit: int = 50) -> list[TabEntry]:
     )
 
 
-async def get_tab_settlement_by_idempotency(
-    tab_id: str, idempotency_key: str
-) -> TabSettlement | None:
+async def get_tab_settlement_by_idempotency(tab_id: str, idempotency_key: str) -> TabSettlement | None:
     return await db.fetchone(
         """
         SELECT * FROM tabs.tab_settlements
@@ -157,9 +149,7 @@ async def get_tab_settlement_by_idempotency(
     )
 
 
-async def create_tab_settlement(
-    tab_id: str, data: CreateTabSettlement
-) -> TabSettlement:
+async def create_tab_settlement(tab_id: str, data: CreateTabSettlement) -> TabSettlement:
     settlement = TabSettlement(
         id=urlsafe_short_hash(),
         tab_id=tab_id,
