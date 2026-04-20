@@ -189,6 +189,45 @@ window.PageTabs = {
     }
   },
   methods: {
+    isSatsCurrency(currency) {
+      return (currency || 'sats').toLowerCase() === 'sats'
+    },
+    amountScale(currency) {
+      if (this.isSatsCurrency(currency)) return 1
+      try {
+        const digits = new Intl.NumberFormat(window.i18n.global.locale, {
+          style: 'currency',
+          currency: (currency || '').toUpperCase()
+        }).resolvedOptions().maximumFractionDigits
+        return 10 ** digits
+      } catch {
+        return 100
+      }
+    },
+    mapTab(tab) {
+      const currency = tab?.currency || 'sats'
+      return {
+        ...tab,
+        currency,
+        balance: this.normalizeAmount(currency, tab?.balance) ?? 0,
+        limit_amount: this.normalizeAmount(currency, tab?.limit_amount)
+      }
+    },
+    mapEntries(entries, currency) {
+      return (entries || []).map(entry => ({
+        ...entry,
+        amount:
+          entry?.amount === null || entry?.amount === undefined
+            ? null
+            : this.normalizeAmount(currency, entry.amount)
+      }))
+    },
+    mapSettlements(settlements, currency) {
+      return (settlements || []).map(settlement => ({
+        ...settlement,
+        amount: this.normalizeAmount(currency, settlement?.amount) ?? 0
+      }))
+    },
     ensureTabDetails(tabId) {
       const selectedTab = this.tabsList.find(tab => tab.id === tabId)
       if (!this.tabDetails[tabId]) {
@@ -233,14 +272,18 @@ window.PageTabs = {
       }
     },
     amountStep(currency) {
-      return currency === 'sats' ? '1' : '0.01'
+      return this.isSatsCurrency(currency) ? '1' : '0.01'
     },
     amountMask(currency) {
-      return currency === 'sats' ? '#' : '#.##'
+      return this.isSatsCurrency(currency) ? '#' : '#.##'
     },
     normalizeAmount(currency, value) {
       if (value === null || value === undefined || value === '') return null
-      return currency === 'sats' ? parseInt(value, 10) : parseFloat(value)
+      const parsed = Number(value)
+      if (Number.isNaN(parsed)) return null
+      if (this.isSatsCurrency(currency)) return Math.round(parsed)
+      const scale = this.amountScale(currency)
+      return Math.round(parsed * scale) / scale
     },
     statusColor(status) {
       if (status === 'open') return 'positive'
@@ -249,7 +292,7 @@ window.PageTabs = {
       return 'primary'
     },
     formatAmount(amount, currency) {
-      if (currency === 'sats') {
+      if (this.isSatsCurrency(currency)) {
         return `${Number(amount || 0).toLocaleString()} sats`
       }
       return LNbits.utils.formatCurrency(amount || 0, currency)
@@ -276,7 +319,7 @@ window.PageTabs = {
           'GET',
           `/tabs/api/v1/tabs/paginated?${params}`
         )
-        this.tabsList = data.data || []
+        this.tabsList = (data.data || []).map(tab => this.mapTab(tab))
         this.tabsTable.pagination.rowsNumber = data.total || 0
       } catch (error) {
         LNbits.utils.notifyApiError(error)
@@ -296,7 +339,7 @@ window.PageTabs = {
           'GET',
           `/tabs/api/v1/tabs/${tabId}/entries/paginated?${params}`
         )
-        details.entries = data.data || []
+        details.entries = this.mapEntries(data.data, details.currency)
         this.entriesTable.pagination.rowsNumber = data.total || 0
       } catch (error) {
         LNbits.utils.notifyApiError(error)
@@ -317,7 +360,7 @@ window.PageTabs = {
           'GET',
           `/tabs/api/v1/tabs/${tabId}/settlements?limit=10`
         )
-        details.settlements = data || []
+        details.settlements = this.mapSettlements(data, details.currency)
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       }
@@ -393,10 +436,11 @@ window.PageTabs = {
       }
     },
     showSettlementDialog(tab) {
+      const mappedTab = this.mapTab(tab)
       this.settlementDialog.tabId = tab.id
-      this.settlementDialog.currency = tab.currency || 'sats'
-      this.settlementDialog.balance = tab.balance || 0
-      this.settlementDialog.data = this.emptySettlementForm(tab.balance || 0)
+      this.settlementDialog.currency = mappedTab.currency
+      this.settlementDialog.balance = mappedTab.balance || 0
+      this.settlementDialog.data = this.emptySettlementForm(mappedTab.balance || 0)
       this.settlementDialog.show = true
     },
     async saveSettlement() {

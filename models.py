@@ -110,22 +110,23 @@ class CreateTabEntry(BaseModel):
     operator_user_id: str | None = None
     idempotency_key: str | None = None
 
-
-class TabEntry(BaseModel):
-    id: str
-    tab_id: str
+class PublicTabEntry(BaseModel):
     entry_type: str
     amount: float = 0
     description: str | None = None
-    unit_label: str | None = None
     quantity: float | None = None
     metadata: str | None = None
     source: str | None = None
-    source_id: str | None = None
     source_action: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TabEntry(PublicTabEntry):
+    id: str
+    tab_id: str
+    unit_label: str | None = None
+    source_id: str | None = None
     operator_user_id: str | None = None
     idempotency_key: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class TabEntryFilters(FilterModel):

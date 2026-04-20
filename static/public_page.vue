@@ -11,18 +11,42 @@
             v-text="tab.customer_name"
           ></div>
         </q-card-section>
+        <q-card-section>
+          <div class="text-subtitle2">Entries</div>
+          <q-list dense>
+            <q-item v-for="entry in tab.entries" :key="entry.id">
+              <q-item-section>
+                <q-item-label
+                  v-text="entry.description || 'Entry'"
+                ></q-item-label>
+                <q-item-label caption v-if="entry.quantity != null">
+                  Quantity: {{ entry.quantity }} {{ entry.unit_label || '' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-item-label
+                  v-text="formatAmount(entry.amount, tab.currency)"
+                ></q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!tab.entries || tab.entries.length === 0">
+              <q-item-section class="text-center">
+                <q-item-label caption>No entries found.</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
         <q-card-section class="q-pt-none">
-          <q-banner dense rounded>
-            Outstanding balance:
-            <span
-              class="text-weight-medium"
-              v-text="formatAmount(tab.balance || 0, tab.currency)"
-            ></span>
-          </q-banner>
+          Outstanding balance:
+          <span
+            class="text-weight-medium"
+            v-text="formatAmount(tab.balance || 0, tab.currency)"
+          ></span>
         </q-card-section>
         <q-card-actions
           v-if="tab.status !== 'closed' && (tab.balance || 0) > 0"
           align="right"
+          class="q-pa-md"
         >
           <q-btn unelevated color="primary" @click="openFormDialog">
             Pay Tab

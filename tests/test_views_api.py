@@ -90,3 +90,9 @@ async def test_public_tab_endpoint_exposes_only_public_fields(client: AsyncClien
     assert payload["customer_name"] == "Bob"
     assert "wallet" not in payload
     assert "reference" not in payload
+
+
+@pytest.mark.asyncio
+async def test_public_tab_entries_returns_404_for_unknown_tab(client: AsyncClient):
+    response = await client.get("/tabs/api/v1/public/tabs/nonexistent/entries")
+    assert response.status_code == 404

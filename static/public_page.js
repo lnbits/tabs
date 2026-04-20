@@ -24,21 +24,59 @@ window.PageTabsPublic = {
     }
   },
   methods: {
+    isSatsCurrency(currency) {
+      return (currency || 'sats').toLowerCase() === 'sats'
+    },
+    amountScale(currency) {
+      if (this.isSatsCurrency(currency)) return 1
+      try {
+        const digits = new Intl.NumberFormat(window.i18n.global.locale, {
+          style: 'currency',
+          currency: (currency || '').toUpperCase()
+        }).resolvedOptions().maximumFractionDigits
+        return 10 ** digits
+      } catch {
+        return 100
+      }
+    },
+    mapPublicTab(tab) {
+      const currency = tab?.currency || 'sats'
+      return {
+        ...(tab || {}),
+        currency,
+        balance: this.normalizeAmount(currency, tab?.balance) || 0
+      }
+    },
+    mapPublicEntries(entries, currency) {
+      return (entries || []).map(entry => ({
+        ...entry,
+        amount: this.normalizeAmount(currency, entry?.amount) ?? 0
+      }))
+    },
     amountStep(currency) {
-      return currency === 'sats' ? '1' : '0.01'
+      return this.isSatsCurrency(currency) ? '1' : '0.01'
     },
     amountMask(currency) {
-      return currency === 'sats' ? '#' : '#.##'
+      return this.isSatsCurrency(currency) ? '#' : '#.##'
     },
     normalizeAmount(currency, value) {
       if (value === null || value === undefined || value === '') return null
-      return currency === 'sats' ? parseInt(value, 10) : parseFloat(value)
+      const parsed = Number(value)
+      if (Number.isNaN(parsed)) return null
+      if (this.isSatsCurrency(currency)) return Math.round(parsed)
+      const scale = this.amountScale(currency)
+      return Math.round(parsed * scale) / scale
     },
     validAmount(value) {
-      return value !== null && value !== undefined && value !== '' && Number(value) > 0
+      return (
+        value !== null &&
+        value !== undefined &&
+        value !== '' &&
+        Number(value) > 0
+      )
     },
     formatAmount(amount, currency) {
-      if (currency === 'sats') {
+      if (this.isSatsCurrency(currency)) {
         return `${Number(amount || 0).toLocaleString()} sats`
       }
       return LNbits.utils.formatCurrency(amount || 0, currency)
@@ -49,10 +87,18 @@ window.PageTabsPublic = {
           'GET',
           `/tabs/api/v1/public/tabs/${this.tabId}`
         )
-        this.tab = data || {}
-        if (!this.formDialog.data.amount) {
-          this.formDialog.data.amount = this.tab.balance || null
-        }
+        this.tab = this.mapPublicTab(data)
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
+      }
+    },
+    async fetchEntries() {
+      try {
+        const {data} = await LNbits.api.request(
+          'GET',
+          `/tabs/api/v1/public/tabs/${this.tabId}/entries`
+        )
+        this.tab.entries = this.mapPublicEntries(data, this.tab.currency || 'sats')
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       }
@@ -95,8 +141,12 @@ window.PageTabsPublic = {
         this.formDialog.show = false
         this.invoicePaid = false
         this.paymentHash = data.settlement?.payment_hash || ''
+        const settlementAmount = this.normalizeAmount(
+          this.tab.currency || 'sats',
+          data.settlement?.amount
+        )
         this.qrCodeDialog.data = {
-          amount: data.settlement?.amount || payload.amount,
+          amount: settlementAmount ?? payload.amount,
           payment_request: data.payment_request
         }
         this.qrCodeDialog.show = true
@@ -128,6 +178,7 @@ window.PageTabsPublic = {
           this.invoicePaid = true
           this.closeQrCodeDialog()
           await this.fetchTab()
+          await this.fetchEntries()
           ws.close()
         }
       })
@@ -143,5 +194,6 @@ window.PageTabsPublic = {
   async created() {
     this.tabId = this.$route.params.id
     await this.fetchTab()
+    await this.fetchEntries()
   }
 }

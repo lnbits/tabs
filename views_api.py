@@ -23,6 +23,7 @@ from .models import (
     CreateTab,
     CreateTabEntry,
     CreateTabSettlement,
+    PublicTabEntry,
     PublicTab,
     PublicTabSettlementRequest,
     SettlementCreateResponse,
@@ -273,6 +274,16 @@ async def api_mark_settlement_complete(
 async def api_get_public_tab(tab_id: str) -> PublicTab:
     tab = await ensure_tab_exists_for_public_settlement(tab_id)
     return PublicTab(**tab.dict())
+
+
+@tabs_api_router.get(
+    "/api/v1/public/tabs/{tab_id}/entries",
+    response_model=list[PublicTabEntry],
+)
+async def api_get_public_tab_entries(tab_id: str) -> list[PublicTabEntry]:
+    await ensure_tab_exists_for_public_settlement(tab_id)
+    entries = await get_tab_entries(tab_id, 100)
+    return [PublicTabEntry(**entry.dict(), ignore_extra=True) for entry in entries]
 
 
 @tabs_api_router.post(

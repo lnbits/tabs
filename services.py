@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 
 from fastapi import HTTPException
+
 from lnbits.core.crud import get_wallet
 from lnbits.core.models import Payment
 from lnbits.core.services import create_invoice
@@ -54,7 +55,9 @@ def _normalize_amount(currency: str, amount: float | int | None) -> float:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid amount.") from exc
     if _is_sats(currency):
         if numeric != int(numeric):
-            raise HTTPException(HTTPStatus.BAD_REQUEST, "Sats amounts must be whole numbers.")
+            raise HTTPException(
+                HTTPStatus.BAD_REQUEST, "Sats amounts must be whole numbers."
+            )
         return float(int(numeric))
     return round(numeric, 2)
 
@@ -135,9 +138,7 @@ def _validate_entry_amount(tab: Tab, entry_type: str, amount: float | None) -> f
         return 0
     normalized = _normalize_amount(tab.currency, amount)
     if normalized <= 0 and entry_type in {"charge", "credit", "settlement"}:
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST, "Amount must be greater than zero."
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Amount must be greater than zero.")
     return normalized
 
 
@@ -145,7 +146,9 @@ def _validate_entry_against_tab(tab: Tab, entry: CreateTabEntry, amount: float) 
     if tab.is_archived:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs are read-only.")
     if tab.status == "closed" and entry.entry_type != "note":
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot accept new entries.")
+        raise HTTPException(
+            HTTPStatus.BAD_REQUEST, "Closed tabs cannot accept new entries."
+        )
     if tab.status == "suspended" and entry.entry_type == "charge":
         raise HTTPException(
             HTTPStatus.BAD_REQUEST, "Suspended tabs cannot accept new charges."
@@ -190,7 +193,9 @@ async def post_entry(tab: Tab, data: CreateTabEntry) -> tuple[Tab, TabEntry]:
 async def update_status(tab: Tab, data: UpdateTabStatus) -> Tab:
     _validate_tab_status(data.status)
     if tab.is_archived:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs cannot change status.")
+        raise HTTPException(
+            HTTPStatus.BAD_REQUEST, "Archived tabs cannot change status."
+        )
     if tab.status == "closed" and data.status != "closed":
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot be reopened.")
     if data.status == "closed" and not _is_zero(tab.currency, tab.balance):
@@ -230,28 +235,37 @@ async def delete_tab_if_empty(tab: Tab) -> None:
     await delete_tab(tab.id)
 
 
-async def create_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
+async def create_settlement(
+    tab: Tab, data: CreateTabSettlement
+) -> SettlementCreateResponse:
     _validate_settlement_method(data.method)
 
     if tab.is_archived:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs are read-only.")
     if tab.status == "closed":
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot be settled.")
-    if _is_zero(tab.currency, tab.balance) or tab.balance <= 0:
+    outstanding_balance = _normalize_amount(tab.currency, tab.balance)
+    if _is_zero(tab.currency, outstanding_balance) or outstanding_balance <= 0:
         raise HTTPException(
             HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle."
         )
 
-    amount = _normalize_amount(tab.currency, data.amount or tab.balance)
+    requested_amount = (
+        data.amount if data.amount is not None else outstanding_balance
+    )
+    amount = _normalize_amount(tab.currency, requested_amount)
     if amount <= 0:
         raise HTTPException(
             HTTPStatus.BAD_REQUEST, "Settlement amount must be greater than zero."
         )
-    if amount > tab.balance:
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST,
-            "Settlement amount cannot exceed the outstanding balance.",
-        )
+    if amount > outstanding_balance:
+        if _is_zero(tab.currency, amount - outstanding_balance):
+            amount = outstanding_balance
+        else:
+            raise HTTPException(
+                HTTPStatus.BAD_REQUEST,
+                "Settlement amount cannot exceed the outstanding balance.",
+            )
     data.amount = amount
 
     if data.idempotency_key:

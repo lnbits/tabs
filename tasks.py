@@ -10,7 +10,7 @@ from .services import payment_received_for_settlement
 ########## RUN YOUR TASKS HERE ########
 #######################################
 
-# The usual task is to listen to invoices related to this extension
+# Listen to invoices related to this extension.
 
 
 async def wait_for_paid_invoices():
@@ -21,7 +21,7 @@ async def wait_for_paid_invoices():
         await on_invoice_paid(payment)
 
 
-# Do somethhing when an invoice related top this extension is paid
+# Handle invoices paid for this extension.
 
 
 async def on_invoice_paid(payment: Payment) -> None:
@@ -33,5 +33,5 @@ async def on_invoice_paid(payment: Payment) -> None:
 
     try:
         await payment_received_for_settlement(payment)
-    except Exception as e:
-        logger.error(f"Error processing payment for tabs: {e}")
+    except Exception:
+        logger.exception("Error processing payment for tabs.")
