@@ -86,13 +86,19 @@
           <q-item>
             <q-item-section>
               <q-item-label caption>Status</q-item-label>
-              <q-item-label v-text="tab.status || '-'"></q-item-label>
+              <q-item-label
+                class="text-capitalize"
+                v-text="tab.status || '-'"
+              ></q-item-label>
             </q-item-section>
           </q-item>
           <q-item>
             <q-item-section>
               <q-item-label caption>Currency</q-item-label>
-              <q-item-label v-text="tab.currency || '-'"></q-item-label>
+              <q-item-label
+                class="text-uppercase"
+                v-text="tab.currency || '-'"
+              ></q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
@@ -152,26 +158,24 @@
       v-model="qrCodeDialog.show"
       position="top"
       @hide="closeQrCodeDialog"
+      v-if="qrCodeDialog.data.payment_request"
     >
       <q-card class="q-pa-lg q-pt-xl lnbits__dialog-card text-center">
         <div class="text-subtitle1 q-mb-md">
           <span
+            class="text-h6"
             v-text="formatAmount(qrCodeDialog.data.amount, tab.currency)"
           ></span>
         </div>
-        <a
-          v-if="qrCodeDialog.data.payment_request"
-          class="text-secondary"
+        <lnbits-qrcode
           :href="'lightning:' + qrCodeDialog.data.payment_request"
-        >
-          <lnbits-qrcode
-            :value="'lightning:' + qrCodeDialog.data.payment_request"
-          ></lnbits-qrcode>
-        </a>
-        <div class="q-mt-md">
+          :value="'lightning:' + qrCodeDialog.data.payment_request"
+        ></lnbits-qrcode>
+        <div class="row q-mt-md">
           <q-btn outline color="grey" @click="copyPaymentRequest">
             Copy Invoice
           </q-btn>
+          <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
         </div>
       </q-card>
     </q-dialog>
