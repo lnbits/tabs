@@ -24,12 +24,6 @@ async def create_tab(data: CreateTab) -> Tab:
     return tab
 
 
-def _in_clause(values: list[str], prefix: str) -> tuple[str, dict[str, str | bool]]:
-    params: dict[str, str | bool] = {f"{prefix}_{i}": value for i, value in enumerate(values)}
-    clause = ", ".join([f":{key}" for key in params])
-    return clause, params
-
-
 async def get_tab_by_id(tab_id: str) -> Tab | None:
     return await db.fetchone(
         """
@@ -224,24 +218,30 @@ async def update_tab_settlement(settlement: TabSettlement) -> TabSettlement:
 
 
 async def count_tab_entries(tab_id: str) -> int:
-    row = await db.fetchone(
+    row: dict | None = await db.fetchone(
         """
-        SELECT COUNT(*) AS count
+        SELECT COUNT(*) AS total
         FROM tabs.tab_entries
         WHERE tab_id = :tab_id
         """,
         {"tab_id": tab_id},
     )
-    return int((row or {}).get("count", 0))
+    return int(row["total"]) if row else 0
 
 
 async def count_tab_settlements(tab_id: str) -> int:
-    row = await db.fetchone(
+    row: dict | None = await db.fetchone(
         """
-        SELECT COUNT(*) AS count
+        SELECT COUNT(*) AS total
         FROM tabs.tab_settlements
         WHERE tab_id = :tab_id
         """,
         {"tab_id": tab_id},
     )
-    return int((row or {}).get("count", 0))
+    return int(row["total"]) if row else 0
+
+
+def _in_clause(values: list[str], prefix: str) -> tuple[str, dict[str, str | bool]]:
+    params: dict[str, str | bool] = {f"{prefix}_{i}": value for i, value in enumerate(values)}
+    clause = ", ".join([f":{key}" for key in params])
+    return clause, params

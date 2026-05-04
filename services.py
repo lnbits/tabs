@@ -281,19 +281,17 @@ async def _existing_settlement_response(tab: Tab, data: CreateTabSettlement) -> 
 
 async def _create_lightning_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
     settlement = await create_tab_settlement(tab.id, data)
-    invoice_kwargs = {
-        "wallet_id": tab.wallet,
-        "amount": settlement.amount,
-        "memo": f"Tab settlement: {tab.name}",
-        "extra": {
+    payment = await create_invoice(
+        wallet_id=tab.wallet,
+        amount=settlement.amount,
+        currency="sat" if _is_sats(tab.currency) else tab.currency,
+        memo=f"Tab settlement: {tab.name}",
+        extra={
             "tag": "tabs",
             "tab_id": tab.id,
             "settlement_id": settlement.id,
         },
-    }
-    if not _is_sats(tab.currency):
-        invoice_kwargs["currency"] = tab.currency
-    payment = await create_invoice(**invoice_kwargs)
+    )
     settlement.payment_hash = payment.payment_hash
     settlement.checking_id = payment.checking_id
     settlement.payment_request = payment.bolt11
