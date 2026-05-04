@@ -60,12 +60,6 @@
                 label="Status"
               ></q-select>
             </div>
-            <div class="col-12 col-sm-6 col-md-4 flex items-center">
-              <q-toggle
-                v-model="filters.includeArchived"
-                label="Show archived tabs"
-              ></q-toggle>
-            </div>
           </div>
 
           <q-table
@@ -177,41 +171,24 @@
     <div class="col-12 col-lg-3">
       <q-card>
         <q-card-section>
-          <h6 class="text-subtitle1 q-my-none">Manual Test Notes</h6>
+          <h6 class="text-subtitle1 q-my-none">LNbits Tabs Extension</h6>
         </q-card-section>
+        <q-separator></q-separator>
         <q-card-section class="q-pt-none">
-          <q-list dense>
-            <q-item
-              ><q-item-section
-                ><q-item-label
-                  >Create a tab with wallet and currency.</q-item-label
-                ></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label
-                  >Post charges or credits in the tab currency.</q-item-label
-                ></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label
-                  >Use the public page to test Lightning
-                  settlement.</q-item-label
-                ></q-item-section
-              ></q-item
-            >
-            <q-item
-              ><q-item-section
-                ><q-item-label
-                  >Watch the balance and status update after
-                  payment.</q-item-label
-                ></q-item-section
-              ></q-item
-            >
-          </q-list>
+          <q-expansion-item
+            group="extras"
+            icon="swap_vertical_circle"
+            label="API info"
+            :content-inset-level="0.5"
+          >
+            <q-btn
+              flat
+              label="Swagger API"
+              type="a"
+              target="_blank"
+              href="../docs#/Tabs"
+            ></q-btn>
+          </q-expansion-item>
         </q-card-section>
       </q-card>
     </div>

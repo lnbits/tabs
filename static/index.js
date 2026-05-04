@@ -8,8 +8,7 @@ window.PageTabs = {
       currencies: ['sats'],
       selected: [],
       filters: {
-        status: null,
-        includeArchived: false
+        status: null
       },
       statusOptions: [
         {label: 'Open', value: 'open'},
@@ -178,9 +177,6 @@ window.PageTabs = {
     'filters.status'() {
       this.getTabs()
     },
-    'filters.includeArchived'() {
-      this.getTabs()
-    },
     selected() {
       if (this.selected.length === 1) {
         this.entriesTable.pagination.page = 1
@@ -314,7 +310,7 @@ window.PageTabs = {
         if (this.filters.status) {
           params += `${params ? '&' : ''}status=${encodeURIComponent(this.filters.status)}`
         }
-        params += `${params ? '&' : ''}is_archived=${this.filters.includeArchived}`
+        params += `${params ? '&' : ''}`
         const {data} = await LNbits.api.request(
           'GET',
           `/tabs/api/v1/tabs/paginated?${params}`
