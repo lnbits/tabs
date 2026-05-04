@@ -1,4 +1,5 @@
 import os
+from typing import Any, cast
 
 import pytest_asyncio
 from fastapi import FastAPI
@@ -29,6 +30,6 @@ async def init_ext():
 async def client():
     app = FastAPI()
     app.include_router(tabs_ext)
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=cast(Any, app))
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client

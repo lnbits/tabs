@@ -281,7 +281,7 @@ async def api_get_public_tab(tab_id: str) -> PublicTab:
 async def api_get_public_tab_entries(tab_id: str) -> list[PublicTabEntry]:
     await ensure_tab_exists_for_public_settlement(tab_id)
     entries = await get_tab_entries(tab_id, 100)
-    return [PublicTabEntry(**entry.dict(), ignore_extra=True) for entry in entries]
+    return [PublicTabEntry(**entry.dict()) for entry in entries]
 
 
 @tabs_api_router.post(

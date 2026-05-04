@@ -24,8 +24,8 @@ async def create_tab(data: CreateTab) -> Tab:
     return tab
 
 
-def _in_clause(values: list[str], prefix: str) -> tuple[str, dict[str, str]]:
-    params = {f"{prefix}_{i}": value for i, value in enumerate(values)}
+def _in_clause(values: list[str], prefix: str) -> tuple[str, dict[str, str | bool]]:
+    params: dict[str, str | bool] = {f"{prefix}_{i}": value for i, value in enumerate(values)}
     clause = ", ".join([f":{key}" for key in params])
     return clause, params
 
