@@ -37,67 +37,6 @@ from .models import (
 )
 
 
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _is_sats(currency: str | None) -> bool:
-    return (currency or "sats").lower() == "sats"
-
-
-def _normalize_amount(currency: str, amount: float | int | None) -> float:
-    if amount is None:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Amount is required.")
-    try:
-        numeric = float(amount)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid amount.") from exc
-    if _is_sats(currency):
-        if numeric != int(numeric):
-            raise HTTPException(HTTPStatus.BAD_REQUEST, "Sats amounts must be whole numbers.")
-        return float(int(numeric))
-    return round(numeric, 2)
-
-
-def _is_zero(currency: str, amount: float) -> bool:
-    return amount == 0 if _is_sats(currency) else abs(amount) < 0.005
-
-
-def _entry_delta(entry_type: str, amount: float) -> float:
-    if entry_type == "charge":
-        return amount
-    if entry_type in {"credit", "settlement"}:
-        return -amount
-    if entry_type == "adjustment":
-        return amount
-    return 0
-
-
-def _validate_tab_status(status: str) -> None:
-    if status not in TAB_STATUSES:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid tab status.")
-
-
-def _validate_limit_type(limit_type: str) -> None:
-    if limit_type not in TAB_LIMIT_TYPES:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid tab limit type.")
-
-
-def _validate_entry_type(entry_type: str) -> None:
-    if entry_type not in TAB_ENTRY_TYPES:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid tab entry type.")
-
-
-def _validate_settlement_method(method: str) -> None:
-    if method not in SETTLEMENT_METHODS:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid settlement method.")
-
-
-def _validate_settlement_status(status: str) -> None:
-    if status not in SETTLEMENT_STATUSES:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid settlement status.")
-
-
 async def validate_tab_wallet_ownership(user_id: str, wallet_id: str) -> None:
     wallet = await get_wallet(wallet_id)
     if not wallet or wallet.user != user_id:
@@ -214,54 +153,13 @@ async def delete_tab_if_empty(tab: Tab) -> None:
 
 async def create_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
     _validate_settlement_method(data.method)
+    data.amount = _settlement_amount(tab, data, _validate_tab_allows_settlement(tab))
 
-    if tab.is_archived:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs are read-only.")
-    if tab.status == "closed":
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot be settled.")
-    outstanding_balance = _normalize_amount(tab.currency, tab.balance)
-    if _is_zero(tab.currency, outstanding_balance) or outstanding_balance <= 0:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle.")
-
-    requested_amount = data.amount if data.amount is not None else outstanding_balance
-    amount = _normalize_amount(tab.currency, requested_amount)
-    if amount <= 0:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "Settlement amount must be greater than zero.")
-    if amount > outstanding_balance:
-        if _is_zero(tab.currency, amount - outstanding_balance):
-            amount = outstanding_balance
-        else:
-            raise HTTPException(
-                HTTPStatus.BAD_REQUEST,
-                "Settlement amount cannot exceed the outstanding balance.",
-            )
-    data.amount = amount
-
-    if data.idempotency_key:
-        existing = await get_tab_settlement_by_idempotency(tab.id, data.idempotency_key)
-        if existing:
-            return SettlementCreateResponse(settlement=existing, payment_request=existing.payment_request)
-
+    existing = await _existing_settlement_response(tab, data)
+    if existing:
+        return existing
     if data.method == "lightning":
-        settlement = await create_tab_settlement(tab.id, data)
-        invoice_kwargs = {
-            "wallet_id": tab.wallet,
-            "amount": settlement.amount,
-            "memo": f"Tab settlement: {tab.name}",
-            "extra": {
-                "tag": "tabs",
-                "tab_id": tab.id,
-                "settlement_id": settlement.id,
-            },
-        }
-        if not _is_sats(tab.currency):
-            invoice_kwargs["currency"] = tab.currency
-        payment = await create_invoice(**invoice_kwargs)
-        settlement.payment_hash = payment.payment_hash
-        settlement.checking_id = payment.checking_id
-        settlement.payment_request = payment.bolt11
-        settlement = await update_tab_settlement(settlement)
-        return SettlementCreateResponse(settlement=settlement, payment_request=payment.bolt11)
+        return await _create_lightning_settlement(tab, data)
 
     settlement = await create_tab_settlement(tab.id, data)
     return SettlementCreateResponse(settlement=await complete_settlement(settlement, mark_status_only=False))
@@ -343,3 +241,122 @@ async def ensure_tab_exists_for_public_settlement(tab_id: str) -> Tab:
     if not tab or tab.is_archived:
         raise HTTPException(HTTPStatus.NOT_FOUND, "Tab not found.")
     return tab
+
+
+def _validate_tab_allows_settlement(tab: Tab) -> float:
+    if tab.is_archived:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs are read-only.")
+    if tab.status == "closed":
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Closed tabs cannot be settled.")
+
+    outstanding_balance = _normalize_amount(tab.currency, tab.balance)
+    if _is_zero(tab.currency, outstanding_balance) or outstanding_balance <= 0:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle.")
+    return outstanding_balance
+
+
+def _settlement_amount(tab: Tab, data: CreateTabSettlement, outstanding_balance: float) -> float:
+    requested_amount = data.amount if data.amount is not None else outstanding_balance
+    amount = _normalize_amount(tab.currency, requested_amount)
+    if amount <= 0:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Settlement amount must be greater than zero.")
+    if amount <= outstanding_balance:
+        return amount
+    if _is_zero(tab.currency, amount - outstanding_balance):
+        return outstanding_balance
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        "Settlement amount cannot exceed the outstanding balance.",
+    )
+
+
+async def _existing_settlement_response(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse | None:
+    if not data.idempotency_key:
+        return None
+    existing = await get_tab_settlement_by_idempotency(tab.id, data.idempotency_key)
+    if not existing:
+        return None
+    return SettlementCreateResponse(settlement=existing, payment_request=existing.payment_request)
+
+
+async def _create_lightning_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
+    settlement = await create_tab_settlement(tab.id, data)
+    invoice_kwargs = {
+        "wallet_id": tab.wallet,
+        "amount": settlement.amount,
+        "memo": f"Tab settlement: {tab.name}",
+        "extra": {
+            "tag": "tabs",
+            "tab_id": tab.id,
+            "settlement_id": settlement.id,
+        },
+    }
+    if not _is_sats(tab.currency):
+        invoice_kwargs["currency"] = tab.currency
+    payment = await create_invoice(**invoice_kwargs)
+    settlement.payment_hash = payment.payment_hash
+    settlement.checking_id = payment.checking_id
+    settlement.payment_request = payment.bolt11
+    settlement = await update_tab_settlement(settlement)
+    return SettlementCreateResponse(settlement=settlement, payment_request=payment.bolt11)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _is_sats(currency: str | None) -> bool:
+    return (currency or "sats").lower() == "sats"
+
+
+def _normalize_amount(currency: str, amount: float | int | None) -> float:
+    if amount is None:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Amount is required.")
+    try:
+        numeric = float(amount)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid amount.") from exc
+    if _is_sats(currency):
+        if numeric != int(numeric):
+            raise HTTPException(HTTPStatus.BAD_REQUEST, "Sats amounts must be whole numbers.")
+        return float(int(numeric))
+    return round(numeric, 2)
+
+
+def _is_zero(currency: str, amount: float) -> bool:
+    return amount == 0 if _is_sats(currency) else abs(amount) < 0.005
+
+
+def _entry_delta(entry_type: str, amount: float) -> float:
+    if entry_type == "charge":
+        return amount
+    if entry_type in {"credit", "settlement"}:
+        return -amount
+    if entry_type == "adjustment":
+        return amount
+    return 0
+
+
+def _validate_tab_status(status: str) -> None:
+    if status not in TAB_STATUSES:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid tab status.")
+
+
+def _validate_limit_type(limit_type: str) -> None:
+    if limit_type not in TAB_LIMIT_TYPES:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid tab limit type.")
+
+
+def _validate_entry_type(entry_type: str) -> None:
+    if entry_type not in TAB_ENTRY_TYPES:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid tab entry type.")
+
+
+def _validate_settlement_method(method: str) -> None:
+    if method not in SETTLEMENT_METHODS:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid settlement method.")
+
+
+def _validate_settlement_status(status: str) -> None:
+    if status not in SETTLEMENT_STATUSES:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Invalid settlement status.")
