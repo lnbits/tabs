@@ -174,6 +174,18 @@
           <h6 class="text-subtitle1 q-my-none">LNbits Tabs Extension</h6>
         </q-card-section>
         <q-separator></q-separator>
+        <q-card-section>
+          <p>Some more info about Tabs.</p>
+          <small
+            >Created by
+            <a
+              class="text-secondary"
+              href="https://github.com/lnbits"
+              target="_blank"
+              >LNbits extension builder</a
+            >.</small
+          >
+        </q-card-section>
         <q-card-section class="q-pt-none">
           <q-expansion-item
             group="extras"
