@@ -211,6 +211,18 @@ async def get_tab_settlements(tab_id: str, limit: int = 50) -> list[TabSettlemen
     )
 
 
+async def get_pending_settlement_amount(tab_id: str) -> float:
+    row: dict | None = await db.fetchone(
+        """
+        SELECT COALESCE(SUM(amount), 0) AS amount
+        FROM tabs.tab_settlements
+        WHERE tab_id = :tab_id AND status = 'pending'
+        """,
+        {"tab_id": tab_id},
+    )
+    return float(row["amount"]) if row else 0
+
+
 async def update_tab_settlement(settlement: TabSettlement) -> TabSettlement:
     settlement.updated_at = datetime.now(timezone.utc)
     await db.update("tabs.tab_settlements", settlement)

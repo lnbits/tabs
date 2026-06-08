@@ -14,6 +14,7 @@ from .crud import (
     delete_tab,
     get_tab_by_id,
     get_tab_entry_by_idempotency,
+    get_pending_settlement_amount,
     get_tab_settlement,
     get_tab_settlement_by_checking_id,
     get_tab_settlement_by_idempotency,
@@ -170,11 +171,13 @@ async def delete_tab_if_empty(tab: Tab) -> None:
 
 async def create_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
     _validate_settlement_method(data.method)
-    data.amount = _settlement_amount(tab, data, _validate_tab_allows_settlement(tab))
-
     existing = await _existing_settlement_response(tab, data)
     if existing:
         return existing
+
+    outstanding_balance = await _available_settlement_balance(tab)
+    data.amount = _settlement_amount(tab, data, outstanding_balance)
+
     if data.method == "lightning":
         return await _create_lightning_settlement(tab, data)
 
@@ -193,32 +196,33 @@ async def complete_settlement(settlement: TabSettlement, mark_status_only: bool 
     if not tab:
         raise HTTPException(HTTPStatus.NOT_FOUND, "Tab not found.")
 
-    settlement.status = "completed"
-    settlement.completed_at = _utc_now()
-    settlement = await update_tab_settlement(settlement)
-
     if mark_status_only:
+        settlement.status = "completed"
+        settlement.completed_at = _utc_now()
+        settlement = await update_tab_settlement(settlement)
         return settlement
 
     entry_idempotency_key = f"settlement:{settlement.id}"
     existing_entry = await get_tab_entry_by_idempotency(tab.id, entry_idempotency_key)
-    if existing_entry:
-        return settlement
+    if not existing_entry:
+        tab, _ = await post_entry(
+            tab,
+            CreateTabEntry(
+                entry_type="settlement",
+                amount=settlement.amount,
+                description=settlement.description or f"{settlement.method} settlement",
+                metadata=settlement.metadata,
+                source="tabs",
+                source_id=settlement.id,
+                source_action="settlement_completed",
+                operator_user_id=settlement.operator_user_id,
+                idempotency_key=entry_idempotency_key,
+            ),
+        )
 
-    tab, _ = await post_entry(
-        tab,
-        CreateTabEntry(
-            entry_type="settlement",
-            amount=settlement.amount,
-            description=settlement.description or f"{settlement.method} settlement",
-            metadata=settlement.metadata,
-            source="tabs",
-            source_id=settlement.id,
-            source_action="settlement_completed",
-            operator_user_id=settlement.operator_user_id,
-            idempotency_key=entry_idempotency_key,
-        ),
-    )
+    settlement.status = "completed"
+    settlement.completed_at = _utc_now()
+    settlement = await update_tab_settlement(settlement)
 
     if _is_zero(tab.currency, tab.balance) and tab.status != "closed":
         tab.status = "closed"
@@ -270,6 +274,15 @@ def _validate_tab_allows_settlement(tab: Tab) -> float:
     if _is_zero(tab.currency, outstanding_balance) or outstanding_balance <= 0:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle.")
     return outstanding_balance
+
+
+async def _available_settlement_balance(tab: Tab) -> float:
+    outstanding_balance = _validate_tab_allows_settlement(tab)
+    pending_amount = await get_pending_settlement_amount(tab.id)
+    available_balance = round(outstanding_balance - pending_amount, 2)
+    if _is_zero(tab.currency, available_balance) or available_balance <= 0:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no available balance to settle.")
+    return available_balance
 
 
 def _settlement_amount(tab: Tab, data: CreateTabSettlement, outstanding_balance: float) -> float:
