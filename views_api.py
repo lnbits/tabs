@@ -43,8 +43,8 @@ from .services import (
     delete_tab_if_empty,
     ensure_tab_exists_for_public_settlement,
     post_entry,
-    update_tab_details,
     update_status,
+    update_tab_details,
     validate_tab_payload,
     validate_tab_wallet_ownership,
 )

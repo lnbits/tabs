@@ -1,11 +1,19 @@
 import pytest
+from fastapi.exceptions import HTTPException
 from httpx import AsyncClient
 from lnbits.core.services.users import create_user_account_no_ckeck
 from lnbits.helpers import create_access_token
 
-from tabs.crud import create_tab, create_tab_settlement, get_tab_settlement  # type: ignore[import]
+from tabs.crud import (  # type: ignore[import]
+    create_tab,
+    create_tab_settlement,
+    get_tab_by_id,
+    get_tab_entries,
+    get_tab_settlement,
+    get_tab_settlements,
+)
 from tabs.models import CreateTab, CreateTabEntry, CreateTabSettlement  # type: ignore[import]
-from tabs.services import complete_settlement, post_entry  # type: ignore[import]
+from tabs.services import complete_settlement, create_settlement, post_entry  # type: ignore[import]
 
 
 @pytest.mark.asyncio
@@ -194,13 +202,50 @@ async def test_complete_settlement_does_not_mark_completed_when_entry_fails():
         CreateTabSettlement(amount=100, method="cash"),
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         await complete_settlement(settlement)
 
     persisted = await get_tab_settlement(settlement.id)
     assert persisted is not None
     assert persisted.status == "pending"
     assert persisted.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_idempotent_entry_does_not_duplicate_balance():
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=100, idempotency_key="charge-1"))
+    _, entry = await post_entry(
+        tab,
+        CreateTabEntry(entry_type="charge", amount=100, idempotency_key="charge-1"),
+    )
+
+    entries = await get_tab_entries(tab.id)
+    updated_tab = await get_tab_by_id(tab.id)
+    assert len(entries) == 1
+    assert entry.id == entries[0].id
+    assert updated_tab is not None
+    assert updated_tab.balance == 100
+
+
+@pytest.mark.asyncio
+async def test_lightning_settlement_invoice_failure_does_not_persist_settlement(monkeypatch):
+    async def fake_create_invoice(**kwargs):
+        raise RuntimeError("invoice failed")
+
+    monkeypatch.setattr("tabs.services.create_invoice", fake_create_invoice)
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=100))
+
+    with pytest.raises(RuntimeError):
+        await create_settlement(tab, CreateTabSettlement(amount=100, method="lightning"))
+
+    assert await get_tab_settlements(tab.id) == []
 
 
 @pytest.mark.asyncio

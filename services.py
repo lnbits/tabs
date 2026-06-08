@@ -5,20 +5,22 @@ from fastapi import HTTPException
 from lnbits.core.crud import get_wallet
 from lnbits.core.models import Payment
 from lnbits.core.services import create_invoice
+from lnbits.helpers import urlsafe_short_hash
 
 from .crud import (
     count_tab_entries,
     count_tab_settlements,
-    create_tab_entry,
-    create_tab_settlement,
     delete_tab,
+    get_or_create_tab_entry,
+    get_or_create_tab_settlement,
+    get_pending_settlement_amount,
     get_tab_by_id,
     get_tab_entry_by_idempotency,
-    get_pending_settlement_amount,
     get_tab_settlement,
     get_tab_settlement_by_checking_id,
     get_tab_settlement_by_idempotency,
     get_tab_settlement_by_payment_hash,
+    insert_tab_settlement_if_idempotent_new,
     update_tab,
     update_tab_settlement,
 )
@@ -100,15 +102,13 @@ async def post_entry(tab: Tab, data: CreateTabEntry) -> tuple[Tab, TabEntry]:
     _validate_entry_type(data.entry_type)
     amount = _validate_entry_amount(tab, data.entry_type, data.amount)
 
-    if data.idempotency_key:
-        existing = await get_tab_entry_by_idempotency(tab.id, data.idempotency_key)
-        if existing:
-            return tab, existing
-
     _validate_entry_against_tab(tab, data, amount)
     data.amount = amount
 
-    entry = await create_tab_entry(tab.id, data)
+    entry, created = await get_or_create_tab_entry(tab.id, data)
+    if not created:
+        return tab, entry
+
     tab.balance = round(tab.balance + _entry_delta(entry.entry_type, entry.amount), 2)
     if _is_zero(tab.currency, tab.balance):
         tab.balance = 0
@@ -181,7 +181,9 @@ async def create_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCr
     if data.method == "lightning":
         return await _create_lightning_settlement(tab, data)
 
-    settlement = await create_tab_settlement(tab.id, data)
+    settlement, created = await get_or_create_tab_settlement(tab.id, data)
+    if not created:
+        return SettlementCreateResponse(settlement=settlement, payment_request=settlement.payment_request)
     return SettlementCreateResponse(settlement=await complete_settlement(settlement, mark_status_only=False))
 
 
@@ -310,7 +312,11 @@ async def _existing_settlement_response(tab: Tab, data: CreateTabSettlement) -> 
 
 
 async def _create_lightning_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCreateResponse:
-    settlement = await create_tab_settlement(tab.id, data)
+    settlement = TabSettlement(
+        id=urlsafe_short_hash(),
+        tab_id=tab.id,
+        **data.dict(),
+    )
     payment = await create_invoice(
         wallet_id=tab.wallet,
         amount=settlement.amount,
@@ -325,8 +331,9 @@ async def _create_lightning_settlement(tab: Tab, data: CreateTabSettlement) -> S
     settlement.payment_hash = payment.payment_hash
     settlement.checking_id = payment.checking_id
     settlement.payment_request = payment.bolt11
-    settlement = await update_tab_settlement(settlement)
-    return SettlementCreateResponse(settlement=settlement, payment_request=payment.bolt11)
+    settlement, created = await insert_tab_settlement_if_idempotent_new(settlement)
+    payment_request = payment.bolt11 if created else settlement.payment_request
+    return SettlementCreateResponse(settlement=settlement, payment_request=payment_request)
 
 
 def _utc_now() -> datetime:

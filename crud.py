@@ -109,6 +109,27 @@ async def create_tab_entry(tab_id: str, data: CreateTabEntry) -> TabEntry:
     return entry
 
 
+async def get_or_create_tab_entry(tab_id: str, data: CreateTabEntry) -> tuple[TabEntry, bool]:
+    if not data.idempotency_key:
+        return await create_tab_entry(tab_id, data), True
+
+    async with db.connect() as conn:
+        existing = await conn.fetchone(
+            """
+            SELECT * FROM tabs.tab_entries
+            WHERE tab_id = :tab_id AND idempotency_key = :idempotency_key
+            """,
+            {"tab_id": tab_id, "idempotency_key": data.idempotency_key},
+            TabEntry,
+        )
+        if existing:
+            return existing, False
+
+        entry = TabEntry(id=urlsafe_short_hash(), tab_id=tab_id, **data.dict())
+        await conn.insert("tabs.tab_entries", entry)
+        return entry, True
+
+
 async def get_tab_entries_paginated(tab_id: str, filters: Filters[TabEntryFilters] | None = None) -> Page[TabEntry]:
     return await db.fetch_page(
         "SELECT * FROM tabs.tab_entries",
@@ -151,6 +172,52 @@ async def create_tab_settlement(tab_id: str, data: CreateTabSettlement) -> TabSe
     )
     await db.insert("tabs.tab_settlements", settlement)
     return settlement
+
+
+async def get_or_create_tab_settlement(tab_id: str, data: CreateTabSettlement) -> tuple[TabSettlement, bool]:
+    if not data.idempotency_key:
+        return await create_tab_settlement(tab_id, data), True
+
+    async with db.connect() as conn:
+        existing = await conn.fetchone(
+            """
+            SELECT * FROM tabs.tab_settlements
+            WHERE tab_id = :tab_id AND idempotency_key = :idempotency_key
+            """,
+            {"tab_id": tab_id, "idempotency_key": data.idempotency_key},
+            TabSettlement,
+        )
+        if existing:
+            return existing, False
+
+        settlement = TabSettlement(
+            id=urlsafe_short_hash(),
+            tab_id=tab_id,
+            **data.dict(),
+        )
+        await conn.insert("tabs.tab_settlements", settlement)
+        return settlement, True
+
+
+async def insert_tab_settlement_if_idempotent_new(settlement: TabSettlement) -> tuple[TabSettlement, bool]:
+    if not settlement.idempotency_key:
+        await db.insert("tabs.tab_settlements", settlement)
+        return settlement, True
+
+    async with db.connect() as conn:
+        existing = await conn.fetchone(
+            """
+            SELECT * FROM tabs.tab_settlements
+            WHERE tab_id = :tab_id AND idempotency_key = :idempotency_key
+            """,
+            {"tab_id": settlement.tab_id, "idempotency_key": settlement.idempotency_key},
+            TabSettlement,
+        )
+        if existing:
+            return existing, False
+
+        await conn.insert("tabs.tab_settlements", settlement)
+        return settlement, True
 
 
 async def get_tab_settlement(settlement_id: str) -> TabSettlement | None:
