@@ -4,7 +4,8 @@ from lnbits.core.services.users import create_user_account_no_ckeck
 from lnbits.helpers import create_access_token
 
 from tabs.crud import create_tab  # type: ignore[import]
-from tabs.models import CreateTab  # type: ignore[import]
+from tabs.models import CreateTab, CreateTabEntry  # type: ignore[import]
+from tabs.services import post_entry  # type: ignore[import]
 
 
 @pytest.mark.asyncio
@@ -115,3 +116,34 @@ async def test_public_tab_endpoint_exposes_only_public_fields(client: AsyncClien
 async def test_public_tab_entries_returns_404_for_unknown_tab(client: AsyncClient):
     response = await client.get("/tabs/api/v1/public/tabs/nonexistent/entries")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_public_tab_entries_omit_internal_audit_fields(client: AsyncClient):
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+    await post_entry(
+        tab,
+        CreateTabEntry(
+            entry_type="charge",
+            amount=100,
+            description="Private item",
+            metadata='{"operator": "alice"}',
+            source="tpos",
+            source_id="sale-1",
+            source_action="cart",
+            operator_user_id=user.id,
+            idempotency_key="charge-1",
+        ),
+    )
+
+    response = await client.get(f"/tabs/api/v1/public/tabs/{tab.id}/entries")
+
+    assert response.status_code == 200
+    entry = response.json()[0]
+    assert entry == {
+        "entry_type": "charge",
+        "amount": 100.0,
+        "created_at": entry["created_at"],
+    }
