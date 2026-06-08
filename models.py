@@ -112,17 +112,17 @@ class CreateTabEntry(BaseModel):
 
 
 class PublicTabEntry(BaseModel):
+    id: str
     entry_type: str
     amount: float = 0
+    description: str | None = None
+    unit_label: str | None = None
+    quantity: float | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class TabEntry(PublicTabEntry):
-    id: str
     tab_id: str
-    description: str | None = None
-    unit_label: str | None = None
-    quantity: float | None = None
     metadata: str | None = None
     source: str | None = None
     source_id: str | None = None

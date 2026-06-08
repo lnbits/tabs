@@ -255,7 +255,7 @@ async def test_public_tab_entries_returns_404_for_unknown_tab(client: AsyncClien
 
 
 @pytest.mark.asyncio
-async def test_public_tab_entries_omit_internal_audit_fields(client: AsyncClient):
+async def test_public_tab_entries_include_line_details_without_internal_audit_fields(client: AsyncClient):
     user = await create_user_account_no_ckeck()
     wallet = user.wallets[0]
     tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
@@ -265,6 +265,8 @@ async def test_public_tab_entries_omit_internal_audit_fields(client: AsyncClient
             entry_type="charge",
             amount=100,
             description="Private item",
+            unit_label="drink",
+            quantity=2,
             metadata='{"operator": "alice"}',
             source="tpos",
             source_id="sale-1",
@@ -278,8 +280,16 @@ async def test_public_tab_entries_omit_internal_audit_fields(client: AsyncClient
 
     assert response.status_code == 200
     entry = response.json()[0]
-    assert entry == {
-        "entry_type": "charge",
-        "amount": 100.0,
-        "created_at": entry["created_at"],
-    }
+    assert entry["id"]
+    assert entry["entry_type"] == "charge"
+    assert entry["amount"] == 100.0
+    assert entry["description"] == "Private item"
+    assert entry["unit_label"] == "drink"
+    assert entry["quantity"] == 2.0
+    assert entry["created_at"]
+    assert "metadata" not in entry
+    assert "source" not in entry
+    assert "source_id" not in entry
+    assert "source_action" not in entry
+    assert "operator_user_id" not in entry
+    assert "idempotency_key" not in entry
