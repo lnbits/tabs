@@ -93,7 +93,7 @@ async def api_create_tab(
     await validate_tab_wallet_ownership(user.id, data.wallet)
     tab = Tab(id="pending", status="open", **data.dict())
     validate_tab_payload(tab)
-    return await create_tab(data)
+    return await create_tab(CreateTab(**tab.dict()))
 
 
 @tabs_api_router.get("/api/v1/tabs/{tab_id}", response_model=Tab)

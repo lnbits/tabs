@@ -64,6 +64,31 @@ async def test_tabs_api_happy_flow(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_create_tab_persists_normalized_payload(client: AsyncClient):
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    token = create_access_token({"sub": "", "usr": user.id}, token_expire_minutes=5)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await client.post(
+        "/tabs/api/v1/tabs",
+        json={
+            "wallet": wallet.id,
+            "name": "Cafe",
+            "currency": "SATS",
+            "limit_type": "none",
+            "limit_amount": 100,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    tab = response.json()
+    assert tab["currency"] == "sats"
+    assert tab["limit_amount"] is None
+
+
+@pytest.mark.asyncio
 async def test_public_tab_endpoint_exposes_only_public_fields(client: AsyncClient):
     user = await create_user_account_no_ckeck()
     wallet = user.wallets[0]
