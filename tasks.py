@@ -6,12 +6,6 @@ from loguru import logger
 
 from .services import payment_received_for_settlement
 
-#######################################
-########## RUN YOUR TASKS HERE ########
-#######################################
-
-# Listen to invoices related to this extension.
-
 
 async def wait_for_paid_invoices():
     invoice_queue = asyncio.Queue()
@@ -19,9 +13,6 @@ async def wait_for_paid_invoices():
     while True:
         payment = await invoice_queue.get()
         await on_invoice_paid(payment)
-
-
-# Handle invoices paid for this extension.
 
 
 async def on_invoice_paid(payment: Payment) -> None:

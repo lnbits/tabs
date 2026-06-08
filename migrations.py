@@ -1,6 +1,3 @@
-empty_dict: dict[str, str] = {}
-
-
 async def m001_initial(db):
     await db.execute(
         f"""
