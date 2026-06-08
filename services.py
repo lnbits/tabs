@@ -33,6 +33,7 @@ from .models import (
     Tab,
     TabEntry,
     TabSettlement,
+    UpdateTab,
     UpdateTabStatus,
 )
 
@@ -129,6 +130,22 @@ async def update_status(tab: Tab, data: UpdateTabStatus) -> Tab:
         tab.balance = 0
     await update_tab(tab)
     return tab
+
+
+async def update_tab_details(tab: Tab, data: UpdateTab) -> Tab:
+    if tab.is_archived:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Archived tabs are read-only.")
+
+    existing_currency = tab.currency
+    requested_currency = (data.currency or "sats").lower()
+    has_history = await count_tab_entries(tab.id) > 0 or await count_tab_settlements(tab.id) > 0
+    if existing_currency != requested_currency and has_history:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Cannot change currency after tab history exists.")
+
+    for field, value in data.dict().items():
+        setattr(tab, field, value)
+    validate_tab_payload(tab)
+    return await update_tab(tab)
 
 
 async def archive_tab(tab: Tab) -> Tab:

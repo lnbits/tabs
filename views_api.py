@@ -17,7 +17,6 @@ from .crud import (
     get_tab_settlements_paginated,
     get_tabs,
     get_tabs_paginated,
-    update_tab,
 )
 from .models import (
     CreateTab,
@@ -44,6 +43,7 @@ from .services import (
     delete_tab_if_empty,
     ensure_tab_exists_for_public_settlement,
     post_entry,
+    update_tab_details,
     update_status,
     validate_tab_payload,
     validate_tab_wallet_ownership,
@@ -111,10 +111,7 @@ async def api_update_tab(
     user: User = Depends(check_user_exists),
 ) -> Tab:
     tab = await _get_owned_tab_or_404(user, tab_id)
-    for field, value in data.dict().items():
-        setattr(tab, field, value)
-    validate_tab_payload(tab)
-    return await update_tab(tab)
+    return await update_tab_details(tab, data)
 
 
 @tabs_api_router.post("/api/v1/tabs/{tab_id}/status", response_model=Tab)

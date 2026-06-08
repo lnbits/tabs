@@ -113,6 +113,54 @@ async def test_public_tab_endpoint_exposes_only_public_fields(client: AsyncClien
 
 
 @pytest.mark.asyncio
+async def test_update_tab_rejects_currency_change_after_history(client: AsyncClient):
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    token = create_access_token({"sub": "", "usr": user.id}, token_expire_minutes=5)
+    headers = {"Authorization": f"Bearer {token}"}
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Staff"))
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=100))
+
+    response = await client.put(
+        f"/tabs/api/v1/tabs/{tab.id}",
+        json={
+            "name": "Staff",
+            "currency": "eur",
+            "limit_type": "none",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Cannot change currency after tab history exists."
+
+
+@pytest.mark.asyncio
+async def test_update_tab_rejects_archived_tabs(client: AsyncClient):
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    token = create_access_token({"sub": "", "usr": user.id}, token_expire_minutes=5)
+    headers = {"Authorization": f"Bearer {token}"}
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Quiet"))
+
+    archive_response = await client.post(f"/tabs/api/v1/tabs/{tab.id}/archive", headers=headers)
+    assert archive_response.status_code == 200
+
+    response = await client.put(
+        f"/tabs/api/v1/tabs/{tab.id}",
+        json={
+            "name": "Changed",
+            "currency": "sats",
+            "limit_type": "none",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Archived tabs are read-only."
+
+
+@pytest.mark.asyncio
 async def test_public_tab_entries_returns_404_for_unknown_tab(client: AsyncClient):
     response = await client.get("/tabs/api/v1/public/tabs/nonexistent/entries")
     assert response.status_code == 404
