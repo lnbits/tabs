@@ -71,12 +71,10 @@
             v-model:pagination="tabsTable.pagination"
             :loading="tabsTable.loading"
             @request="getTabs"
-            selection="single"
-            v-model:selected="selected"
           >
             <template v-slot:header="props">
               <q-tr :props="props">
-                <q-th auto-width>View</q-th>
+                <q-th auto-width></q-th>
                 <q-th auto-width></q-th>
                 <q-th
                   v-for="col in props.cols"
@@ -90,12 +88,16 @@
             <template v-slot:body="props">
               <q-tr :props="props">
                 <q-td auto-width>
-                  <q-checkbox
-                    v-model="props.selected"
-                    checked-icon="visibility"
-                    unchecked-icon="visibility_off"
-                    color="green"
-                  />
+                  <q-btn
+                    size="sm"
+                    color="accent"
+                    round
+                    dense
+                    @click="toggleTabExpansion(props)"
+                    :icon="props.expand ? 'expand_less' : 'expand_more'"
+                  >
+                    <q-tooltip>Entries</q-tooltip>
+                  </q-btn>
                 </q-td>
                 <q-td auto-width>
                   <q-btn
@@ -149,21 +151,27 @@
                   v-text="col.value"
                 ></q-td>
               </q-tr>
+              <q-tr v-if="props.expand" :props="props">
+                <q-td colspan="100%">
+                  <div class="q-pa-md">
+                    <q-table
+                      flat
+                      dense
+                      :title="'Entries for ' + (props.row.name || props.row.id)"
+                      :rows="tabDetails[props.row.id]?.entries || []"
+                      :columns="entriesTable.columns"
+                      row-key="id"
+                      v-model:pagination="
+                        tabDetails[props.row.id].entriesPagination
+                      "
+                      :loading="tabDetails[props.row.id]?.entriesLoading"
+                      @request="requestTabEntries(props.row.id, $event)"
+                    ></q-table>
+                  </div>
+                </q-td>
+              </q-tr>
             </template>
           </q-table>
-        </q-card-section>
-        <q-card-section v-if="selected.length">
-          <q-table
-            flat
-            dense
-            :title="`Entries for ${selected[0].name || selected[0].id}`"
-            :rows="tabDetails[selected[0].id]?.entries || []"
-            :columns="entriesTable.columns"
-            row-key="id"
-            v-model:pagination="entriesTable.pagination"
-            :loading="entriesTable.loading"
-            @request="requestTabEntries"
-          ></q-table>
         </q-card-section>
       </q-card>
     </div>

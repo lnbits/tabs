@@ -1,6 +1,6 @@
 {
   "name": "Tabs",
-  "short_description": "",
+  "short_description": "A reusable merchant ledger for open balances",
   "tile": "/tabs/static/image/tabs.png",
   "version": "0.1.0",
   "min_lnbits_version": "1.5.4",

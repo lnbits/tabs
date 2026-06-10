@@ -6,7 +6,6 @@ window.PageTabs = {
       tabsList: [],
       tabDetails: {},
       currencies: ['sats'],
-      selected: [],
       filters: {
         status: null
       },
@@ -35,7 +34,6 @@ window.PageTabs = {
       ],
       entriesTable: {
         search: '',
-        loading: false,
         columns: [
           {
             name: 'description',
@@ -176,12 +174,6 @@ window.PageTabs = {
     },
     'filters.status'() {
       this.getTabs()
-    },
-    selected() {
-      if (this.selected.length === 1) {
-        this.entriesTable.pagination.page = 1
-        this.loadTabEntries(this.selected[0].id, {force: true})
-      }
     }
   },
   methods: {
@@ -229,6 +221,8 @@ window.PageTabs = {
       if (!this.tabDetails[tabId]) {
         this.tabDetails[tabId] = {
           entries: [],
+          entriesLoading: false,
+          entriesPagination: {...this.entriesTable.pagination},
           settlements: [],
           currency: selectedTab?.currency || 'sats'
         }
@@ -236,6 +230,12 @@ window.PageTabs = {
         this.tabDetails[tabId].currency = selectedTab.currency
       }
       return this.tabDetails[tabId]
+    },
+    async toggleTabExpansion(props) {
+      props.expand = !props.expand
+      if (props.expand) {
+        await this.loadTabEntries(props.row.id)
+      }
     },
     emptyTabForm() {
       return {
@@ -329,23 +329,27 @@ window.PageTabs = {
       if (details.entries.length && !force && !props) return
 
       try {
-        this.entriesTable.loading = true
-        const params = LNbits.utils.prepareFilterQuery(this.entriesTable, props)
+        details.entriesLoading = true
+        const table = {
+          search: this.entriesTable.search,
+          pagination: details.entriesPagination
+        }
+        const params = LNbits.utils.prepareFilterQuery(table, props)
         const {data} = await LNbits.api.request(
           'GET',
           `/tabs/api/v1/tabs/${tabId}/entries/paginated?${params}`
         )
         details.entries = this.mapEntries(data.data, details.currency)
-        this.entriesTable.pagination.rowsNumber = data.total || 0
+        details.entriesPagination = table.pagination
+        details.entriesPagination.rowsNumber = data.total || 0
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       } finally {
-        this.entriesTable.loading = false
+        details.entriesLoading = false
       }
     },
-    async requestTabEntries(props) {
-      if (!this.selected.length) return
-      await this.loadTabEntries(this.selected[0].id, {props})
+    async requestTabEntries(tabId, props) {
+      await this.loadTabEntries(tabId, {props})
     },
     async loadTabSettlements(tabId, force = false) {
       const details = this.ensureTabDetails(tabId)
