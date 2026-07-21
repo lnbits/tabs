@@ -88,6 +88,24 @@ async def update_tab(tab: Tab) -> Tab:
     return tab
 
 
+async def reserve_tab_settlement(tab_id: str, amount: float) -> bool:
+    result = await db.execute(
+        """
+        UPDATE tabs.tabs
+        SET pending_settlement_amount = pending_settlement_amount + :amount
+        WHERE id = :tab_id
+          AND balance - pending_settlement_amount >= :amount
+        """,
+        {"tab_id": tab_id, "amount": amount},
+    )
+    return result.rowcount == 1
+
+
+async def release_tab_settlement(tab: Tab, amount: float) -> Tab:
+    tab.pending_settlement_amount = max(0, round(tab.pending_settlement_amount - amount, 2))
+    return await update_tab(tab)
+
+
 async def delete_tab(tab_id: str) -> None:
     await db.execute("DELETE FROM tabs.tabs WHERE id = :tab_id", {"tab_id": tab_id})
 

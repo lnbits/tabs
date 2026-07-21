@@ -38,7 +38,6 @@ from .models import (
 from .services import (
     archive_tab,
     cancel_settlement,
-    complete_settlement,
     create_settlement,
     delete_tab_if_empty,
     ensure_tab_exists_for_public_settlement,
@@ -248,21 +247,6 @@ async def api_cancel_settlement(
         raise HTTPException(HTTPStatus.NOT_FOUND, "Settlement not found.")
     await _get_owned_tab_or_404(user, settlement.tab_id)
     return await cancel_settlement(settlement)
-
-
-@tabs_api_router.post(
-    "/api/v1/settlements/{settlement_id}/mark-complete",
-    response_model=TabSettlement,
-)
-async def api_mark_settlement_complete(
-    settlement_id: str,
-    user: User = Depends(check_user_exists),
-) -> TabSettlement:
-    settlement = await get_tab_settlement(settlement_id)
-    if not settlement:
-        raise HTTPException(HTTPStatus.NOT_FOUND, "Settlement not found.")
-    await _get_owned_tab_or_404(user, settlement.tab_id)
-    return await complete_settlement(settlement)
 
 
 @tabs_api_router.get("/api/v1/public/tabs/{tab_id}", response_model=PublicTab)

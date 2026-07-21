@@ -1,3 +1,6 @@
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 from fastapi.exceptions import HTTPException
 from httpx import AsyncClient
@@ -13,7 +16,12 @@ from tabs.crud import (  # type: ignore[import]
     get_tab_settlements,
 )
 from tabs.models import CreateTab, CreateTabEntry, CreateTabSettlement  # type: ignore[import]
-from tabs.services import complete_settlement, create_settlement, post_entry  # type: ignore[import]
+from tabs.services import (  # type: ignore[import]
+    complete_manual_settlement,
+    create_settlement,
+    payment_received_for_settlement,
+    post_entry,
+)
 
 
 @pytest.mark.asyncio
@@ -203,12 +211,70 @@ async def test_complete_settlement_does_not_mark_completed_when_entry_fails():
     )
 
     with pytest.raises(HTTPException):
-        await complete_settlement(settlement)
+        await complete_manual_settlement(settlement)
 
     persisted = await get_tab_settlement(settlement.id)
     assert persisted is not None
     assert persisted.status == "pending"
     assert persisted.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_lightning_settlements_cannot_be_completed_or_cancelled_manually(client: AsyncClient):
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+    settlement = await create_tab_settlement(
+        tab.id,
+        CreateTabSettlement(amount=100, method="lightning"),
+    )
+
+    with pytest.raises(HTTPException, match="complete when their invoice is paid"):
+        await complete_manual_settlement(settlement)
+
+    token = create_access_token({"sub": "", "usr": user.id}, token_expire_minutes=5)
+    response = await client.post(
+        f"/tabs/api/v1/settlements/{settlement.id}/mark-complete",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+    response = await client.post(
+        f"/tabs/api/v1/settlements/{settlement.id}/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_paid_lightning_invoice_is_completed_by_the_listener():
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=100))
+    settlement = await create_tab_settlement(
+        tab.id,
+        CreateTabSettlement(amount=100, method="lightning"),
+    )
+
+    assert await payment_received_for_settlement(
+        SimpleNamespace(payment_hash="hash-1", checking_id="checking-1", extra={"settlement_id": settlement.id})
+    )
+    persisted = await get_tab_settlement(settlement.id)
+    assert persisted and persisted.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_idempotent_entries_are_stored_once():
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+    entry = CreateTabEntry(entry_type="charge", amount=100, idempotency_key="charge-1")
+
+    await asyncio.gather(post_entry(tab, entry), post_entry(tab, entry.copy()))
+
+    entries = await get_tab_entries(tab.id)
+    assert len(entries) == 1
 
 
 @pytest.mark.asyncio
@@ -246,6 +312,37 @@ async def test_lightning_settlement_invoice_failure_does_not_persist_settlement(
         await create_settlement(tab, CreateTabSettlement(amount=100, method="lightning"))
 
     assert await get_tab_settlements(tab.id) == []
+    updated_tab = await get_tab_by_id(tab.id)
+    assert updated_tab and updated_tab.pending_settlement_amount == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_lightning_settlements_cannot_exceed_tab_balance(monkeypatch):
+    class FakePayment:
+        payment_hash = "hash-1"
+        checking_id = "checking-1"
+        bolt11 = "bolt11-1"
+
+    invoice_started = asyncio.Event()
+    release_invoice = asyncio.Event()
+
+    async def fake_create_invoice(**kwargs):
+        invoice_started.set()
+        await release_invoice.wait()
+        return FakePayment()
+
+    monkeypatch.setattr("tabs.services.create_invoice", fake_create_invoice)
+    user = await create_user_account_no_ckeck()
+    wallet = user.wallets[0]
+    tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=100))
+
+    first = asyncio.create_task(create_settlement(tab, CreateTabSettlement(amount=100, method="lightning")))
+    await invoice_started.wait()
+    with pytest.raises(HTTPException, match="no available balance"):
+        await create_settlement(tab, CreateTabSettlement(amount=100, method="lightning"))
+    release_invoice.set()
+    await first
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ async def m001_initial(db):
             limit_type TEXT NOT NULL DEFAULT 'none',
             limit_amount REAL,
             balance REAL NOT NULL DEFAULT 0,
+            pending_settlement_amount REAL NOT NULL DEFAULT 0,
             is_archived BOOLEAN NOT NULL DEFAULT false,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
