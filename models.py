@@ -51,7 +51,6 @@ class Tab(BaseModel):
     limit_type: str = "none"
     limit_amount: float | None = None
     balance: float = 0
-    pending_settlement_amount: float = 0
     is_archived: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -17,6 +17,7 @@ window.PageTabsPublic = {
         show: false,
         data: {
           amount: null,
+          settlement_id: '',
           payment_request: ''
         },
         dismissMsg: null
@@ -150,6 +151,7 @@ window.PageTabsPublic = {
         )
         this.qrCodeDialog.data = {
           amount: settlementAmount ?? payload.amount,
+          settlement_id: data.settlement?.id || '',
           payment_request: data.payment_request
         }
         this.qrCodeDialog.show = true

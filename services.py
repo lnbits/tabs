@@ -20,8 +20,6 @@ from .crud import (
     get_tab_settlement_by_idempotency,
     get_tab_settlement_by_payment_hash,
     insert_tab_settlement_if_idempotent_new,
-    release_tab_settlement,
-    reserve_tab_settlement,
     update_tab,
     update_tab_settlement,
 )
@@ -176,12 +174,10 @@ async def create_settlement(tab: Tab, data: CreateTabSettlement) -> SettlementCr
     if existing:
         return existing
 
-    outstanding_balance = await _available_settlement_balance(tab)
+    outstanding_balance = _validate_tab_allows_settlement(tab)
     data.amount = _settlement_amount(tab, data, outstanding_balance)
 
     if data.method == "lightning":
-        if not await reserve_tab_settlement(tab.id, data.amount):
-            raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no available balance to settle.")
         return await _create_lightning_settlement(tab, data)
 
     settlement, created = await get_or_create_tab_settlement(tab.id, data)
@@ -228,9 +224,6 @@ async def _complete_settlement(settlement: TabSettlement) -> TabSettlement:
     settlement.status = "completed"
     settlement.completed_at = _utc_now()
     settlement = await update_tab_settlement(settlement)
-    if settlement.method == "lightning":
-        tab = await release_tab_settlement(tab, settlement.amount)
-
     if _is_zero(tab.currency, tab.balance) and tab.status != "closed":
         tab.status = "closed"
         tab.balance = 0
@@ -244,10 +237,8 @@ async def cancel_settlement(settlement: TabSettlement) -> TabSettlement:
     if settlement.status == "completed":
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Completed settlements cannot be cancelled.")
     if settlement.method == "lightning":
-        raise HTTPException(
-            HTTPStatus.BAD_REQUEST,
-            "Lightning settlements cannot be cancelled because their invoice may still be paid.",
-        )
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Lightning settlements cannot be cancelled.")
+
     settlement.status = "cancelled"
     settlement.cancelled_at = _utc_now()
     return await update_tab_settlement(settlement)
@@ -288,14 +279,6 @@ def _validate_tab_allows_settlement(tab: Tab) -> float:
     if _is_zero(tab.currency, outstanding_balance) or outstanding_balance <= 0:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no outstanding balance to settle.")
     return outstanding_balance
-
-
-async def _available_settlement_balance(tab: Tab) -> float:
-    outstanding_balance = _validate_tab_allows_settlement(tab)
-    available_balance = round(outstanding_balance - tab.pending_settlement_amount, 2)
-    if _is_zero(tab.currency, available_balance) or available_balance <= 0:
-        raise HTTPException(HTTPStatus.BAD_REQUEST, "This tab has no available balance to settle.")
-    return available_balance
 
 
 def _settlement_amount(tab: Tab, data: CreateTabSettlement, outstanding_balance: float) -> float:
@@ -341,7 +324,6 @@ async def _create_lightning_settlement(tab: Tab, data: CreateTabSettlement) -> S
             },
         )
     except Exception:
-        await release_tab_settlement(tab, settlement.amount)
         raise
     settlement.payment_hash = payment.payment_hash
     settlement.checking_id = payment.checking_id

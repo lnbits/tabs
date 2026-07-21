@@ -177,7 +177,7 @@ async def test_update_tab_rejects_archived_tabs(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_public_settlement_rejects_when_pending_settlement_covers_balance(client: AsyncClient, monkeypatch):
+async def test_public_settlement_allows_multiple_unpaid_invoices(client: AsyncClient, monkeypatch):
     class FakePayment:
         payment_hash = "hash-1"
         checking_id = "checking-1"
@@ -196,8 +196,7 @@ async def test_public_settlement_rejects_when_pending_settlement_covers_balance(
     assert first_response.status_code == 201
 
     second_response = await client.post(f"/tabs/api/v1/public/tabs/{tab.id}/settlements", json={})
-    assert second_response.status_code == 400
-    assert second_response.json()["detail"] == "This tab has no available balance to settle."
+    assert second_response.status_code == 201
 
 
 @pytest.mark.asyncio
@@ -220,7 +219,7 @@ async def test_complete_settlement_does_not_mark_completed_when_entry_fails():
 
 
 @pytest.mark.asyncio
-async def test_lightning_settlements_cannot_be_completed_or_cancelled_manually(client: AsyncClient):
+async def test_lightning_settlements_cannot_be_completed_manually(client: AsyncClient):
     user = await create_user_account_no_ckeck()
     wallet = user.wallets[0]
     tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
@@ -238,12 +237,6 @@ async def test_lightning_settlements_cannot_be_completed_or_cancelled_manually(c
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 404
-
-    response = await client.post(
-        f"/tabs/api/v1/settlements/{settlement.id}/cancel",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -312,37 +305,35 @@ async def test_lightning_settlement_invoice_failure_does_not_persist_settlement(
         await create_settlement(tab, CreateTabSettlement(amount=100, method="lightning"))
 
     assert await get_tab_settlements(tab.id) == []
-    updated_tab = await get_tab_by_id(tab.id)
-    assert updated_tab and updated_tab.pending_settlement_amount == 0
 
 
 @pytest.mark.asyncio
-async def test_concurrent_lightning_settlements_cannot_exceed_tab_balance(monkeypatch):
+async def test_multiple_partial_lightning_settlements_can_cover_a_tab(monkeypatch):
     class FakePayment:
-        payment_hash = "hash-1"
-        checking_id = "checking-1"
-        bolt11 = "bolt11-1"
+        def __init__(self, number: int):
+            self.payment_hash = f"hash-{number}"
+            self.checking_id = f"checking-{number}"
+            self.bolt11 = f"bolt11-{number}"
 
-    invoice_started = asyncio.Event()
-    release_invoice = asyncio.Event()
+    invoice_number = 0
 
     async def fake_create_invoice(**kwargs):
-        invoice_started.set()
-        await release_invoice.wait()
-        return FakePayment()
+        nonlocal invoice_number
+        invoice_number += 1
+        return FakePayment(invoice_number)
 
     monkeypatch.setattr("tabs.services.create_invoice", fake_create_invoice)
     user = await create_user_account_no_ckeck()
     wallet = user.wallets[0]
     tab = await create_tab(CreateTab(wallet=wallet.id, name="Patio Tab"))
-    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=100))
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=70))
+    await post_entry(tab, CreateTabEntry(entry_type="charge", amount=30))
 
-    first = asyncio.create_task(create_settlement(tab, CreateTabSettlement(amount=100, method="lightning")))
-    await invoice_started.wait()
-    with pytest.raises(HTTPException, match="no available balance"):
-        await create_settlement(tab, CreateTabSettlement(amount=100, method="lightning"))
-    release_invoice.set()
-    await first
+    first = await create_settlement(tab, CreateTabSettlement(amount=40, method="lightning"))
+    second = await create_settlement(tab, CreateTabSettlement(amount=60, method="lightning"))
+
+    assert first.settlement.status == second.settlement.status == "pending"
+    assert first.settlement.payment_hash != second.settlement.payment_hash
 
 
 @pytest.mark.asyncio

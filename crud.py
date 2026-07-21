@@ -88,24 +88,6 @@ async def update_tab(tab: Tab) -> Tab:
     return tab
 
 
-async def reserve_tab_settlement(tab_id: str, amount: float) -> bool:
-    result = await db.execute(
-        """
-        UPDATE tabs.tabs
-        SET pending_settlement_amount = pending_settlement_amount + :amount
-        WHERE id = :tab_id
-          AND balance - pending_settlement_amount >= :amount
-        """,
-        {"tab_id": tab_id, "amount": amount},
-    )
-    return result.rowcount == 1
-
-
-async def release_tab_settlement(tab: Tab, amount: float) -> Tab:
-    tab.pending_settlement_amount = max(0, round(tab.pending_settlement_amount - amount, 2))
-    return await update_tab(tab)
-
-
 async def delete_tab(tab_id: str) -> None:
     await db.execute("DELETE FROM tabs.tabs WHERE id = :tab_id", {"tab_id": tab_id})
 
@@ -294,18 +276,6 @@ async def get_tab_settlements(tab_id: str, limit: int = 50) -> list[TabSettlemen
         {"tab_id": tab_id},
         TabSettlement,
     )
-
-
-async def get_pending_settlement_amount(tab_id: str) -> float:
-    row: dict | None = await db.fetchone(
-        """
-        SELECT COALESCE(SUM(amount), 0) AS amount
-        FROM tabs.tab_settlements
-        WHERE tab_id = :tab_id AND status = 'pending'
-        """,
-        {"tab_id": tab_id},
-    )
-    return float(row["amount"]) if row else 0
 
 
 async def update_tab_settlement(settlement: TabSettlement) -> TabSettlement:
