@@ -1,6 +1,5 @@
 async def m001_initial(db):
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE IF NOT EXISTS tabs.tabs (
             id TEXT PRIMARY KEY,
             wallet TEXT NOT NULL,
@@ -18,11 +17,9 @@ async def m001_initial(db):
             closed_at TIMESTAMP,
             archived_at TIMESTAMP
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE IF NOT EXISTS tabs.tab_entries (
             id TEXT PRIMARY KEY,
             tab_id TEXT NOT NULL,
@@ -39,11 +36,9 @@ async def m001_initial(db):
             idempotency_key TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE IF NOT EXISTS tabs.tab_settlements (
             id TEXT PRIMARY KEY,
             tab_id TEXT NOT NULL,
@@ -63,5 +58,4 @@ async def m001_initial(db):
             completed_at TIMESTAMP,
             cancelled_at TIMESTAMP
         );
-        """
-    )
+        """)
