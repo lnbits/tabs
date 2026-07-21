@@ -21,6 +21,9 @@ dev = [
     "pytest-md",
 ]
 
+[tool.uv]
+exclude-newer = "1 week"
+
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 
