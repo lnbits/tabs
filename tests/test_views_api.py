@@ -1,9 +1,11 @@
 import asyncio
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi.exceptions import HTTPException
 from httpx import AsyncClient
+from lnbits.core.models import Payment
 from lnbits.core.services.users import create_user_account_no_ckeck
 from lnbits.helpers import create_access_token
 
@@ -251,7 +253,10 @@ async def test_paid_lightning_invoice_is_completed_by_the_listener():
     )
 
     assert await payment_received_for_settlement(
-        SimpleNamespace(payment_hash="hash-1", checking_id="checking-1", extra={"settlement_id": settlement.id})
+        cast(
+            Payment,
+            SimpleNamespace(payment_hash="hash-1", checking_id="checking-1", extra={"settlement_id": settlement.id}),
+        )
     )
     persisted = await get_tab_settlement(settlement.id)
     assert persisted and persisted.status == "completed"
