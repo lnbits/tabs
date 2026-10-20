@@ -142,7 +142,7 @@ async def update_tab_details(tab: Tab, data: UpdateTab) -> Tab:
     if existing_currency != requested_currency and has_history:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Cannot change currency after tab history exists.")
 
-    for field, value in data.dict().items():
+    for field, value in data.model_dump().items():
         setattr(tab, field, value)
     validate_tab_payload(tab)
     return await update_tab(tab)
@@ -309,7 +309,7 @@ async def _create_lightning_settlement(tab: Tab, data: CreateTabSettlement) -> S
     settlement = TabSettlement(
         id=urlsafe_short_hash(),
         tab_id=tab.id,
-        **data.dict(),
+        **data.model_dump(),
     )
     try:
         payment = await create_invoice(
