@@ -90,9 +90,9 @@ async def api_create_tab(
     if data.wallet not in user.wallet_ids:
         raise HTTPException(HTTPStatus.FORBIDDEN, "Invalid wallet. Must belong to authenticated user.")
     await validate_tab_wallet_ownership(user.id, data.wallet)
-    tab = Tab(id="pending", status="open", **data.dict())
+    tab = Tab(id="pending", status="open", **data.model_dump())
     validate_tab_payload(tab)
-    return await create_tab(CreateTab(**tab.dict()))
+    return await create_tab(CreateTab(**tab.model_dump()))
 
 
 @tabs_api_router.get("/api/v1/tabs/{tab_id}", response_model=Tab)
@@ -252,7 +252,7 @@ async def api_cancel_settlement(
 @tabs_api_router.get("/api/v1/public/tabs/{tab_id}", response_model=PublicTab)
 async def api_get_public_tab(tab_id: str) -> PublicTab:
     tab = await ensure_tab_exists_for_public_settlement(tab_id)
-    return PublicTab(**tab.dict())
+    return PublicTab(**tab.model_dump())
 
 
 @tabs_api_router.get(
@@ -262,7 +262,7 @@ async def api_get_public_tab(tab_id: str) -> PublicTab:
 async def api_get_public_tab_entries(tab_id: str) -> list[PublicTabEntry]:
     await ensure_tab_exists_for_public_settlement(tab_id)
     entries = await get_tab_entries(tab_id, 100)
-    return [PublicTabEntry(**entry.dict()) for entry in entries]
+    return [PublicTabEntry(**entry.model_dump()) for entry in entries]
 
 
 @tabs_api_router.post(

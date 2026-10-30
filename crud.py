@@ -19,7 +19,7 @@ db = Database("ext_tabs")
 
 
 async def create_tab(data: CreateTab) -> Tab:
-    tab = Tab(id=urlsafe_short_hash(), status="open", **data.dict())
+    tab = Tab(id=urlsafe_short_hash(), status="open", **data.model_dump())
     await db.insert("tabs.tabs", tab)
     return tab
 
@@ -104,7 +104,7 @@ async def get_tab_entry_by_idempotency(tab_id: str, idempotency_key: str) -> Tab
 
 
 async def create_tab_entry(tab_id: str, data: CreateTabEntry) -> TabEntry:
-    entry = TabEntry(id=urlsafe_short_hash(), tab_id=tab_id, **data.dict())
+    entry = TabEntry(id=urlsafe_short_hash(), tab_id=tab_id, **data.model_dump())
     await db.insert("tabs.tab_entries", entry)
     return entry
 
@@ -125,7 +125,7 @@ async def get_or_create_tab_entry(tab_id: str, data: CreateTabEntry) -> tuple[Ta
         if existing:
             return existing, False
 
-        entry = TabEntry(id=urlsafe_short_hash(), tab_id=tab_id, **data.dict())
+        entry = TabEntry(id=urlsafe_short_hash(), tab_id=tab_id, **data.model_dump())
         await conn.insert("tabs.tab_entries", entry)
         return entry, True
 
@@ -168,7 +168,7 @@ async def create_tab_settlement(tab_id: str, data: CreateTabSettlement) -> TabSe
     settlement = TabSettlement(
         id=urlsafe_short_hash(),
         tab_id=tab_id,
-        **data.dict(),
+        **data.model_dump(),
     )
     await db.insert("tabs.tab_settlements", settlement)
     return settlement
@@ -193,7 +193,7 @@ async def get_or_create_tab_settlement(tab_id: str, data: CreateTabSettlement) -
         settlement = TabSettlement(
             id=urlsafe_short_hash(),
             tab_id=tab_id,
-            **data.dict(),
+            **data.model_dump(),
         )
         await conn.insert("tabs.tab_settlements", settlement)
         return settlement, True
